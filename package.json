@@ -1,0 +1,40 @@
+{
+  "name": "home-server",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "eslint"
+  },
+  "dependencies": {
+    "better-sqlite3": "^12.11.1",
+    "chokidar": "^5.0.0",
+    "drizzle-orm": "^0.45.2",
+    "epub2": "^3.0.2",
+    "gray-matter": "^4.0.3",
+    "html-to-text": "^10.0.0",
+    "lucide-react": "^1.23.0",
+    "next": "16.2.10",
+    "node-cron": "^4.6.0",
+    "pdf-parse": "^2.4.5",
+    "react": "19.2.4",
+    "react-dom": "19.2.4",
+    "sharp": "^0.35.3",
+    "systeminformation": "^5.31.13",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4",
+    "@types/better-sqlite3": "^7.6.13",
+    "@types/node": "^20",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "drizzle-kit": "^0.31.10",
+    "eslint": "^9",
+    "eslint-config-next": "16.2.10",
+    "tailwindcss": "^4",
+    "typescript": "^5"
+  }
+}
