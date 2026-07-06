@@ -4,6 +4,7 @@ import { conversations, messages } from "@/server/db/schema";
 import { backendFor } from "@/server/backends/registry";
 import type { ChatMessage } from "@/server/backends/types";
 import { newId } from "@/server/util/hash";
+import { listMemoryFacts } from "@/server/brain/memory";
 
 const HISTORY_LIMIT = 20;
 
@@ -62,6 +63,12 @@ export function listMessages(conversationId: string) {
     .all();
 }
 
+function getMemoryContext(): string | null {
+  const facts = listMemoryFacts();
+  if (facts.length === 0) return null;
+  return facts.map((f) => `- ${f.content}`).join("\n");
+}
+
 async function getRagContext(query: string): Promise<{ block: string; citations: Citation[] } | null> {
   try {
     const { searchBrain } = await import("@/server/brain/search");
@@ -98,6 +105,14 @@ export async function* sendMessage(
   const chatMessages: ChatMessage[] = [];
   if (conversation.systemPrompt) {
     chatMessages.push({ role: "system", content: conversation.systemPrompt });
+  }
+
+  const memoryBlock = getMemoryContext();
+  if (memoryBlock) {
+    chatMessages.push({
+      role: "system",
+      content: `Things you know about the user from past conversations:\n\n${memoryBlock}`,
+    });
   }
 
   let citations: Citation[] | undefined;
