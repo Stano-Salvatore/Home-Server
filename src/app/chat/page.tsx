@@ -1,8 +1,7 @@
-export default function ChatPage() {
+export default function ChatIndexPage() {
   return (
-    <div className="p-8 text-neutral-400">
-      <h1 className="text-xl font-semibold text-neutral-100 mb-2">Chat</h1>
-      <p>Coming up next.</p>
+    <div className="flex-1 flex items-center justify-center text-neutral-500 text-sm">
+      Select a conversation or start a new chat.
     </div>
   );
 }

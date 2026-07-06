@@ -141,7 +141,11 @@ export async function recoverRunningServers() {
   }
 }
 
-async function* streamChat(target: string, messages: ChatMessage[]): AsyncIterable<string> {
+async function* streamChat(
+  target: string,
+  messages: ChatMessage[],
+  signal?: AbortSignal,
+): AsyncIterable<string> {
   const server = db.select().from(llamacppServers).where(eq(llamacppServers.id, target)).get();
   if (!server) throw new Error("llama.cpp server not found");
 
@@ -149,6 +153,7 @@ async function* streamChat(target: string, messages: ChatMessage[]): AsyncIterab
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ messages, stream: true }),
+    signal,
   });
   if (!res.ok || !res.body) {
     throw new Error(`llama.cpp chat failed: ${res.status} ${res.statusText}`);
@@ -187,8 +192,8 @@ export const llamaCppBackend: ModelBackend = {
       port: r.port,
     }));
   },
-  chatStream(target, messages) {
-    return streamChat(target, messages);
+  chatStream(target, messages, signal) {
+    return streamChat(target, messages, signal);
   },
   async chatComplete(target, messages) {
     let full = "";

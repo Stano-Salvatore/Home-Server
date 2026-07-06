@@ -18,6 +18,6 @@ export type PullProgressEvent = {
 export interface ModelBackend {
   kind: "ollama" | "llamacpp";
   listRunning(): Promise<RunningModel[]>;
-  chatStream(target: string, messages: ChatMessage[]): AsyncIterable<string>;
+  chatStream(target: string, messages: ChatMessage[], signal?: AbortSignal): AsyncIterable<string>;
   chatComplete(target: string, messages: ChatMessage[]): Promise<string>;
 }

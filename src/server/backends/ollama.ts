@@ -78,11 +78,16 @@ export async function* pullModel(tag: string): AsyncGenerator<PullProgressEvent>
   }
 }
 
-async function* streamChat(target: string, messages: ChatMessage[]): AsyncIterable<string> {
+async function* streamChat(
+  target: string,
+  messages: ChatMessage[],
+  signal?: AbortSignal,
+): AsyncIterable<string> {
   const res = await fetch(`${host()}/api/chat`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ model: target, messages, stream: true }),
+    signal,
   });
   if (!res.ok || !res.body) {
     throw new Error(`Ollama chat failed: ${res.status} ${res.statusText}`);
@@ -127,8 +132,8 @@ export const ollamaBackend: ModelBackend = {
   async listRunning() {
     return listLoadedModels();
   },
-  chatStream(target, messages) {
-    return streamChat(target, messages);
+  chatStream(target, messages, signal) {
+    return streamChat(target, messages, signal);
   },
   async chatComplete(target, messages) {
     let full = "";
