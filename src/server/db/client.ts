@@ -18,11 +18,23 @@ function createDb() {
   const sqlite = new Database(DB_PATH);
   sqlite.pragma("journal_mode = WAL");
   sqlite.pragma("foreign_keys = ON");
-  const db = drizzle(sqlite, { schema });
-  migrate(db, { migrationsFolder: path.join(process.cwd(), "drizzle") });
   globalThis.__homeServerSqlite = sqlite;
-  return db;
+  return drizzle(sqlite, { schema });
 }
 
+// NOTE: deliberately does NOT run migrations here. This module gets imported
+// (and this top-level code executed) merely by `next build` collecting page
+// data for every route, across several parallel workers — running the
+// migrator here raced those workers against the same on-disk file ("table
+// already exists"). Migrations are applied exactly once by runMigrations(),
+// called only from instrumentation.ts's bootstrap() at actual server start.
 export const db = globalThis.__homeServerDb ?? (globalThis.__homeServerDb = createDb());
 export const sqlite = globalThis.__homeServerSqlite!;
+
+let migrated = false;
+
+export function runMigrations() {
+  if (migrated) return;
+  migrate(db, { migrationsFolder: path.join(process.cwd(), "drizzle") });
+  migrated = true;
+}

@@ -1,5 +1,5 @@
 import fs from "node:fs";
-import { db } from "@/server/db/client";
+import { runMigrations } from "@/server/db/client";
 import { loadSettings, pathStatus } from "@/server/settings/config";
 
 let bootstrapped = false;
@@ -8,8 +8,7 @@ export async function bootstrap() {
   if (bootstrapped) return;
   bootstrapped = true;
 
-  // Touch the DB (runs migrations as a side effect of import) and load config.
-  void db;
+  runMigrations();
   const config = loadSettings();
 
   fs.mkdirSync(config.uploadsPath, { recursive: true });
