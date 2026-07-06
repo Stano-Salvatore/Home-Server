@@ -2,7 +2,3 @@
 export function startScheduler() {
   console.log("[tasks] scheduler stub started");
 }
-
-export function reconcile(_taskId: string) {
-  // no-op until phase 8
-}

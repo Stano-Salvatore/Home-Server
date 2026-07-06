@@ -9,9 +9,7 @@ const DATA_DIR = path.join(process.cwd(), "data");
 const DB_PATH = process.env.DB_PATH || path.join(DATA_DIR, "app.db");
 
 declare global {
-  // eslint-disable-next-line no-var
   var __homeServerDb: ReturnType<typeof drizzle<typeof schema>> | undefined;
-  // eslint-disable-next-line no-var
   var __homeServerSqlite: Database.Database | undefined;
 }
 
