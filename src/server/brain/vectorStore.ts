@@ -7,8 +7,26 @@ type IndexedChunk = {
   embedding: Float32Array;
 };
 
-let index: IndexedChunk[] = [];
-let loaded = false;
+type VectorIndexState = {
+  chunks: IndexedChunk[];
+  loaded: boolean;
+};
+
+declare global {
+  var __homeServerVectorIndex: VectorIndexState | undefined;
+}
+
+// Next.js can bundle server route handlers and instrumentation-bootstrapped
+// modules into separate module graphs, so a plain module-level variable here
+// is NOT guaranteed to be a single process-wide instance (mirrors why
+// db/client.ts also caches on globalThis). Without this, the ingest path and
+// the search/watcher path can end up mutating two different in-memory arrays.
+function state(): VectorIndexState {
+  if (!globalThis.__homeServerVectorIndex) {
+    globalThis.__homeServerVectorIndex = { chunks: [], loaded: false };
+  }
+  return globalThis.__homeServerVectorIndex;
+}
 
 export function floatsToBuffer(vec: number[]): Buffer {
   const arr = new Float32Array(vec);
@@ -22,31 +40,34 @@ function bufferToFloats(buf: Buffer): Float32Array {
 
 export function loadVectorIndex() {
   const rows = db.select().from(brainChunks).all();
-  index = rows.map((r) => ({
+  const s = state();
+  s.chunks = rows.map((r) => ({
     id: r.id,
     documentId: r.documentId,
     embedding: bufferToFloats(r.embedding),
   }));
-  loaded = true;
-  console.log(`[brain] vector index loaded (${index.length} chunks)`);
+  s.loaded = true;
+  console.log(`[brain] vector index loaded (${s.chunks.length} chunks)`);
 }
 
 function ensureLoaded() {
-  if (!loaded) loadVectorIndex();
+  if (!state().loaded) loadVectorIndex();
 }
 
 export function addToIndex(chunks: { id: string; documentId: string; embedding: number[] }[]) {
   ensureLoaded();
-  const existingIds = new Set(index.map((c) => c.id));
+  const s = state();
+  const existingIds = new Set(s.chunks.map((c) => c.id));
   for (const c of chunks) {
     if (existingIds.has(c.id)) continue; // ensureLoaded() may have just picked this row up from the DB
-    index.push({ id: c.id, documentId: c.documentId, embedding: new Float32Array(c.embedding) });
+    s.chunks.push({ id: c.id, documentId: c.documentId, embedding: new Float32Array(c.embedding) });
   }
 }
 
 export function removeDocumentFromIndex(documentId: string) {
   ensureLoaded();
-  index = index.filter((c) => c.documentId !== documentId);
+  const s = state();
+  s.chunks = s.chunks.filter((c) => c.documentId !== documentId);
 }
 
 function cosineSimilarity(a: Float32Array, b: Float32Array): number {
@@ -66,12 +87,12 @@ function cosineSimilarity(a: Float32Array, b: Float32Array): number {
 export function searchIndex(queryEmbedding: number[], topK: number): { id: string; documentId: string; score: number }[] {
   ensureLoaded();
   const query = new Float32Array(queryEmbedding);
-  return index
-    .map((c) => ({ id: c.id, documentId: c.documentId, score: cosineSimilarity(query, c.embedding) }))
+  return state()
+    .chunks.map((c) => ({ id: c.id, documentId: c.documentId, score: cosineSimilarity(query, c.embedding) }))
     .sort((a, b) => b.score - a.score)
     .slice(0, topK);
 }
 
 export function indexSize() {
-  return index.length;
+  return state().chunks.length;
 }
