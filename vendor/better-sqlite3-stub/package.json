@@ -1,8 +1,0 @@
-{
-  "name": "better-sqlite3",
-  "version": "12.11.1",
-  "description": "Pure-JS stub — this project uses Node's built-in node:sqlite. Exists only so npm can satisfy drizzle-orm's optional better-sqlite3 peer dependency without a native build (which can't compile on Android/Termux).",
-  "main": "index.js",
-  "types": "index.d.ts",
-  "license": "MIT"
-}
