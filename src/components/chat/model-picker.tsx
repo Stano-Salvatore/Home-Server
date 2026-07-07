@@ -22,7 +22,7 @@ export function ModelPicker({
 
   return (
     <select
-      className="rounded-md bg-neutral-950 border border-neutral-800 px-2 py-1 text-sm text-neutral-100"
+      className="rounded-md bg-[var(--surface-2)] border border-[var(--border)] px-2 py-1 text-sm text-ink focus:outline-none focus:border-accent"
       value={selectedKey}
       onChange={(e) => {
         const [backend, ...rest] = e.target.value.split(":");
@@ -36,7 +36,7 @@ export function ModelPicker({
       </option>
       {options.map((o) => (
         <option key={`${o.backend}:${o.id}`} value={`${o.backend}:${o.id}`}>
-          [{o.backend}] {o.label}
+          [{o.nodeName ?? o.backend}] {o.label}
           {o.idle ? " (idle)" : ""}
         </option>
       ))}

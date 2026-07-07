@@ -9,7 +9,8 @@ export function Card({
 }) {
   return (
     <div
-      className={`rounded-lg border border-neutral-800 bg-neutral-900/60 ${className}`}
+      className={`rounded-lg border ${className}`}
+      style={{ background: "var(--surface)", borderColor: "var(--border)" }}
       onClick={onClick}
     >
       {children}

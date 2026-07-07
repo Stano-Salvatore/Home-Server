@@ -1,9 +1,9 @@
 const COLORS = {
-  green: "bg-green-500/15 text-green-400 border-green-500/30",
-  blue: "bg-blue-500/15 text-blue-400 border-blue-500/30",
-  yellow: "bg-yellow-500/15 text-yellow-400 border-yellow-500/30",
-  red: "bg-red-500/15 text-red-400 border-red-500/30",
-  neutral: "bg-neutral-700/40 text-neutral-300 border-neutral-600/50",
+  green: "text-[var(--color-term-green)] border-[var(--color-term-green)]/30 bg-[var(--color-term-green)]/10",
+  blue: "text-[#9cdef2] border-[#9cdef2]/30 bg-[#9cdef2]/10",
+  yellow: "text-[var(--color-term-gold)] border-[var(--color-term-gold)]/30 bg-[var(--color-term-gold)]/10",
+  red: "text-[var(--color-term-red)] border-[var(--color-term-red)]/30 bg-[var(--color-term-red)]/10",
+  neutral: "text-ink-dim border-[var(--border)] bg-[var(--surface-2)]",
 } as const;
 
 export function Badge({

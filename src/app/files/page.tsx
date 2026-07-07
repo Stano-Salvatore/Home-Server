@@ -69,7 +69,7 @@ export default function FilesPage() {
         }}
         onClick={() => inputRef.current?.click()}
         className={`mb-6 rounded-lg border-2 border-dashed p-8 text-center cursor-pointer transition-colors ${
-          dragOver ? "border-indigo-500 bg-indigo-500/5" : "border-neutral-800 hover:border-neutral-700"
+          dragOver ? "border-accent bg-accent/5" : "border-[var(--border)] hover:border-neutral-600"
         }`}
       >
         <p className="text-sm text-neutral-400">

@@ -33,7 +33,9 @@ export function MessageBubble({ message }: { message: ChatUIMessage }) {
     <div className={`flex ${isUser ? "justify-end" : "justify-start"}`}>
       <div
         className={`max-w-2xl rounded-lg px-4 py-2.5 text-sm whitespace-pre-wrap ${
-          isUser ? "bg-indigo-600 text-white" : "bg-neutral-900 text-neutral-100 border border-neutral-800"
+          isUser
+            ? "bg-accent text-black"
+            : "bg-[var(--surface)] text-ink border border-[var(--border)]"
         }`}
       >
         {message.content || (isUser ? "" : "…")}

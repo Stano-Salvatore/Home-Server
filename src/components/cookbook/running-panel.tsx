@@ -54,9 +54,11 @@ export function RunningPanel({
               className="flex items-center justify-between text-sm border border-neutral-800 rounded-md px-3 py-2"
             >
               <div className="flex items-center gap-2">
-                <Badge color={m.backend === "ollama" ? "blue" : "green"}>{m.backend}</Badge>
-                <span className="text-neutral-100">{m.label}</span>
-                {m.port && <span className="text-neutral-500 text-xs">:{m.port}</span>}
+                <Badge color={m.backend === "ollama" ? "blue" : "green"}>
+                  {m.nodeName ?? m.backend}
+                </Badge>
+                <span className="text-ink">{m.label}</span>
+                {m.port && <span className="text-ink-dim text-xs">:{m.port}</span>}
               </div>
               {server && (
                 <Button

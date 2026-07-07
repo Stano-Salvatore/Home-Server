@@ -85,7 +85,7 @@ export default function SettingsPage() {
                 )}
               </div>
               <input
-                className="w-full rounded-md bg-neutral-950 border border-neutral-800 px-3 py-1.5 text-sm text-neutral-100 focus:outline-none focus:border-indigo-600"
+                className="w-full rounded-md bg-[var(--surface-2)] border border-[var(--border)] px-3 py-1.5 text-sm text-ink focus:outline-none focus:border-accent"
                 value={config[key]}
                 onChange={(e) => setConfig({ ...config, [key]: e.target.value })}
                 placeholder={hint}

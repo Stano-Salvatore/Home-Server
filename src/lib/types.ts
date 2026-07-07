@@ -36,6 +36,8 @@ export type ModelOption = {
   contextLength?: number;
   port?: number;
   idle?: boolean;
+  nodeId?: string;
+  nodeName?: string;
 };
 
 export type LlamaCppServerRow = {

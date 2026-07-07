@@ -1,15 +1,15 @@
-import { loadSettings } from "@/server/settings/config";
+import { resolveHost, defaultNode, parseOllamaTarget } from "@/server/nodes/nodes";
 import type { ChatMessage, ModelBackend, PullProgressEvent, RunningModel } from "./types";
 
-function host(): string {
-  return loadSettings().ollamaHost.replace(/\/$/, "");
+function clean(url: string): string {
+  return url.replace(/\/$/, "");
 }
 
 export type OllamaTag = { name: string; size: number; modified_at: string };
 
-export async function listInstalledTags(): Promise<OllamaTag[]> {
+export async function listInstalledTags(host: string): Promise<OllamaTag[]> {
   try {
-    const res = await fetch(`${host()}/api/tags`, { cache: "no-store" });
+    const res = await fetch(`${clean(host)}/api/tags`, { cache: "no-store" });
     if (!res.ok) return [];
     const data = await res.json();
     return data.models ?? [];
@@ -18,9 +18,9 @@ export async function listInstalledTags(): Promise<OllamaTag[]> {
   }
 }
 
-export async function listLoadedModels(): Promise<RunningModel[]> {
+export async function listLoadedModels(host: string): Promise<RunningModel[]> {
   try {
-    const res = await fetch(`${host()}/api/ps`, { cache: "no-store" });
+    const res = await fetch(`${clean(host)}/api/ps`, { cache: "no-store" });
     if (!res.ok) return [];
     const data = await res.json();
     return (data.models ?? []).map(
@@ -36,17 +36,17 @@ export async function listLoadedModels(): Promise<RunningModel[]> {
   }
 }
 
-export async function isOllamaReachable(): Promise<boolean> {
+export async function isOllamaReachable(host: string): Promise<boolean> {
   try {
-    const res = await fetch(`${host()}/api/tags`, { cache: "no-store" });
+    const res = await fetch(`${clean(host)}/api/tags`, { cache: "no-store" });
     return res.ok;
   } catch {
     return false;
   }
 }
 
-export async function* pullModel(tag: string): AsyncGenerator<PullProgressEvent> {
-  const res = await fetch(`${host()}/api/pull`, {
+export async function* pullModel(tag: string, host: string): AsyncGenerator<PullProgressEvent> {
+  const res = await fetch(`${clean(host)}/api/pull`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ name: tag, stream: true }),
@@ -83,10 +83,13 @@ async function* streamChat(
   messages: ChatMessage[],
   signal?: AbortSignal,
 ): AsyncIterable<string> {
-  const res = await fetch(`${host()}/api/chat`, {
+  // target is `nodeId::tag` (or a legacy bare tag → default node).
+  const { nodeId, tag } = parseOllamaTarget(target);
+  const host = resolveHost(nodeId);
+  const res = await fetch(`${clean(host)}/api/chat`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ model: target, messages, stream: true }),
+    body: JSON.stringify({ model: tag, messages, stream: true }),
     signal,
   });
   if (!res.ok || !res.body) {
@@ -113,9 +116,11 @@ async function* streamChat(
 }
 
 export async function embed(texts: string[], model: string): Promise<number[][]> {
+  // Embeddings run on the default node.
+  const host = clean(defaultNode().url);
   const results: number[][] = [];
   for (const text of texts) {
-    const res = await fetch(`${host()}/api/embeddings`, {
+    const res = await fetch(`${host}/api/embeddings`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ model, prompt: text }),
@@ -130,7 +135,7 @@ export async function embed(texts: string[], model: string): Promise<number[][]>
 export const ollamaBackend: ModelBackend = {
   kind: "ollama",
   async listRunning() {
-    return listLoadedModels();
+    return listLoadedModels(defaultNode().url);
   },
   chatStream(target, messages, signal) {
     return streamChat(target, messages, signal);

@@ -25,7 +25,7 @@ export default function BrainPage() {
             onClick={() => setTab(t)}
             className={`px-3 py-2 text-sm border-b-2 -mb-px ${
               tab === t
-                ? "border-indigo-500 text-neutral-100"
+                ? "border-accent text-ink"
                 : "border-transparent text-neutral-500 hover:text-neutral-300"
             }`}
           >

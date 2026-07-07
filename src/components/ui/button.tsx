@@ -3,10 +3,10 @@ import { ButtonHTMLAttributes } from "react";
 type Variant = "default" | "secondary" | "ghost" | "danger";
 
 const VARIANT_CLASSES: Record<Variant, string> = {
-  default: "bg-indigo-600 hover:bg-indigo-500 text-white",
-  secondary: "bg-neutral-800 hover:bg-neutral-700 text-neutral-100",
-  ghost: "bg-transparent hover:bg-neutral-800 text-neutral-300",
-  danger: "bg-red-900/60 hover:bg-red-900 text-red-100",
+  default: "bg-accent hover:bg-accent-hover text-black font-semibold",
+  secondary: "border border-[var(--border)] bg-[var(--surface-2)] hover:border-accent/50 text-ink",
+  ghost: "bg-transparent hover:bg-[var(--surface-2)] text-ink-dim hover:text-ink",
+  danger: "border border-[var(--color-term-red)]/40 bg-[var(--color-term-red)]/10 hover:bg-[var(--color-term-red)]/20 text-[var(--color-term-red)]",
 };
 
 export function Button({
@@ -16,7 +16,7 @@ export function Button({
 }: ButtonHTMLAttributes<HTMLButtonElement> & { variant?: Variant }) {
   return (
     <button
-      className={`inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${VARIANT_CLASSES[variant]} ${className}`}
+      className={`inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${VARIANT_CLASSES[variant]} ${className}`}
       {...props}
     />
   );

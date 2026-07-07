@@ -85,7 +85,7 @@ export default function ConversationPage({ params }: { params: Promise<{ id: str
 
       <div className="border-t border-neutral-900 p-4 flex gap-2">
         <textarea
-          className="flex-1 resize-none rounded-md bg-neutral-950 border border-neutral-800 px-3 py-2 text-sm text-neutral-100 focus:outline-none focus:border-indigo-600"
+          className="flex-1 resize-none rounded-md bg-[var(--surface-2)] border border-[var(--border)] px-3 py-2 text-sm text-ink focus:outline-none focus:border-accent"
           rows={2}
           placeholder="Message…"
           value={input}
