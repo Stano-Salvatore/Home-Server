@@ -1,0 +1,1 @@
+ALTER TABLE `conversations` ADD `wiki_enabled` integer DEFAULT false NOT NULL;

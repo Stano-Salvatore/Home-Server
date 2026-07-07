@@ -1,11 +1,20 @@
 import { NextRequest, NextResponse } from "next/server";
-import { listAgents, addAgent, updateAgent, deleteAgent, seedAgentsFromTags, migrateAgentEmojis } from "@/server/agents/agents";
+import {
+  listAgents,
+  addAgent,
+  updateAgent,
+  deleteAgent,
+  seedAgentsFromTags,
+  migrateAgentEmojis,
+  migrateAgentWikiDefault,
+} from "@/server/agents/agents";
 import { probeNodes } from "@/server/backends/registry";
 
 export const runtime = "nodejs";
 
 export async function GET() {
   migrateAgentEmojis();
+  migrateAgentWikiDefault();
   let agents = listAgents();
   if (agents.length === 0) {
     // First run: seed persona agents from whatever models are on the nodes.
@@ -17,11 +26,18 @@ export async function GET() {
 }
 
 export async function POST(req: NextRequest) {
-  const { name, emoji, modelTag, systemPrompt, description } = await req.json();
+  const { name, emoji, modelTag, systemPrompt, description, wikiDefault } = await req.json();
   if (!name || !modelTag) {
     return NextResponse.json({ error: "name and modelTag are required" }, { status: 400 });
   }
-  const agent = addAgent({ name, emoji: emoji || "🤖", modelTag, systemPrompt, description });
+  const agent = addAgent({
+    name,
+    emoji: emoji || "🤖",
+    modelTag,
+    systemPrompt,
+    description,
+    wikiDefault: !!wikiDefault,
+  });
   return NextResponse.json({ agent });
 }
 

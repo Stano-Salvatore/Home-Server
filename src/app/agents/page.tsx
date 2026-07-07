@@ -14,6 +14,7 @@ type Agent = {
   modelTag: string;
   systemPrompt?: string;
   description?: string;
+  wikiDefault?: boolean;
 };
 
 export default function AgentsPage() {
@@ -64,6 +65,7 @@ export default function AgentsPage() {
         modelId: opt.id,
         title: `${agent.emoji} ${agent.name}`,
         systemPrompt: agent.systemPrompt || undefined,
+        wikiEnabled: agent.wikiDefault ?? false,
       }),
     });
     const data = await res.json();
@@ -177,6 +179,7 @@ function AgentForm({
   const [modelTag, setModelTag] = useState(agent?.modelTag ?? "");
   const [description, setDescription] = useState(agent?.description ?? "");
   const [systemPrompt, setSystemPrompt] = useState(agent?.systemPrompt ?? "");
+  const [wikiDefault, setWikiDefault] = useState(agent?.wikiDefault ?? false);
   const [saving, setSaving] = useState(false);
 
   // Unique ollama model tags across all nodes.
@@ -185,7 +188,7 @@ function AgentForm({
   async function save() {
     if (!name.trim() || !modelTag) return;
     setSaving(true);
-    const body = { id: agent?.id, name, emoji, modelTag, description, systemPrompt };
+    const body = { id: agent?.id, name, emoji, modelTag, description, systemPrompt, wikiDefault };
     await fetch("/api/agents", {
       method: agent ? "PUT" : "POST",
       headers: { "Content-Type": "application/json" },
@@ -240,6 +243,14 @@ function AgentForm({
           value={systemPrompt}
           onChange={(e) => setSystemPrompt(e.target.value)}
         />
+        <label className="flex items-center gap-2 text-xs text-ink-dim">
+          <input
+            type="checkbox"
+            checked={wikiDefault}
+            onChange={(e) => setWikiDefault(e.target.checked)}
+          />
+          Ground with Wikipedia by default
+        </label>
         <div className="flex gap-2">
           <Button onClick={save} disabled={saving || !name.trim() || !modelTag}>
             {saving ? "saving…" : agent ? "save" : "create agent"}

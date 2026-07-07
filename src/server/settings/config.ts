@@ -12,6 +12,11 @@ const AppConfigSchema = z.object({
   llamaCppBinPath: z.string().default("llama-server"),
   ollamaHost: z.string().default("http://127.0.0.1:11434"),
   embeddingModel: z.string().default("nomic-embed-text"),
+  // Wikipedia grounding: "online" hits the live MediaWiki API, "kiwix" hits a
+  // local kiwix-serve (offline). Langs are comma-separated wiki codes.
+  wikipediaProvider: z.string().default("online"),
+  kiwixUrl: z.string().default(""),
+  wikipediaLangs: z.string().default("en,cs"),
 });
 
 export type AppConfig = z.infer<typeof AppConfigSchema>;
@@ -23,6 +28,9 @@ const ENV_DEFAULTS: Record<keyof AppConfig, string | undefined> = {
   llamaCppBinPath: process.env.LLAMACPP_BIN_PATH,
   ollamaHost: process.env.OLLAMA_HOST,
   embeddingModel: process.env.EMBEDDING_MODEL,
+  wikipediaProvider: process.env.WIKIPEDIA_PROVIDER,
+  kiwixUrl: process.env.KIWIX_URL,
+  wikipediaLangs: process.env.WIKIPEDIA_LANGS,
 };
 
 function getRaw(key: string): string | undefined {

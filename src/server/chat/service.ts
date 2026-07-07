@@ -24,6 +24,7 @@ export function createConversation(opts: {
   title?: string;
   systemPrompt?: string;
   ragEnabled?: boolean;
+  wikiEnabled?: boolean;
 }) {
   const id = newId("conv");
   db.insert(conversations)
@@ -34,6 +35,7 @@ export function createConversation(opts: {
       modelId: opts.modelId,
       systemPrompt: opts.systemPrompt ?? null,
       ragEnabled: opts.ragEnabled ?? false,
+      wikiEnabled: opts.wikiEnabled ?? false,
     })
     .run();
   return getConversation(id)!;
@@ -41,7 +43,7 @@ export function createConversation(opts: {
 
 export function updateConversation(
   id: string,
-  patch: Partial<{ title: string; ragEnabled: boolean; backend: string; modelId: string }>,
+  patch: Partial<{ title: string; ragEnabled: boolean; wikiEnabled: boolean; backend: string; modelId: string }>,
 ) {
   db.update(conversations)
     .set({ ...patch, updatedAt: Date.now() / 1000 })
@@ -89,6 +91,28 @@ async function getRagContext(query: string): Promise<{ block: string; citations:
   }
 }
 
+async function getWikipediaContext(
+  query: string,
+): Promise<{ block: string; citations: Citation[] } | null> {
+  try {
+    const { wikipediaSearch } = await import("@/server/wikipedia/wikipedia");
+    const hits = await wikipediaSearch(query);
+    if (hits.length === 0) return null;
+    const block = hits
+      .map((h, i) => `[W${i + 1}] (Wikipedia ${h.lang}: ${h.title}) ${h.extract}`)
+      .join("\n\n");
+    const citations: Citation[] = hits.map((h) => ({
+      documentId: `wiki:${h.lang}:${h.title}`,
+      title: `Wikipedia (${h.lang}): ${h.title}`,
+      sourcePath: h.url,
+      snippet: h.extract.slice(0, 200),
+    }));
+    return { block, citations };
+  } catch {
+    return null;
+  }
+}
+
 export async function* sendMessage(
   conversationId: string,
   userContent: string,
@@ -115,17 +139,28 @@ export async function* sendMessage(
     });
   }
 
-  let citations: Citation[] | undefined;
+  const citationList: Citation[] = [];
   if (conversation.ragEnabled) {
     const rag = await getRagContext(userContent);
     if (rag) {
-      citations = rag.citations;
+      citationList.push(...rag.citations);
       chatMessages.push({
         role: "system",
         content: `Relevant context from the user's notes/library (cite as [n] when used):\n\n${rag.block}`,
       });
     }
   }
+  if (conversation.wikiEnabled) {
+    const wiki = await getWikipediaContext(userContent);
+    if (wiki) {
+      citationList.push(...wiki.citations);
+      chatMessages.push({
+        role: "system",
+        content: `Verified facts from Wikipedia — prefer these over memory for factual claims, and cite as [Wn]:\n\n${wiki.block}`,
+      });
+    }
+  }
+  const citations: Citation[] | undefined = citationList.length > 0 ? citationList : undefined;
 
   for (const m of history) {
     chatMessages.push({ role: m.role as "user" | "assistant", content: m.content });

@@ -12,6 +12,7 @@ type Conversation = {
   backend: string;
   modelId: string;
   ragEnabled: boolean;
+  wikiEnabled: boolean;
 };
 
 export default function ConversationPage({ params }: { params: Promise<{ id: string }> }) {
@@ -32,12 +33,12 @@ export default function ConversationPage({ params }: { params: Promise<{ id: str
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  async function toggleRag() {
+  async function toggle(patch: Partial<Conversation>) {
     if (!conversation) return;
     const res = await fetch(`/api/chat/conversations/${id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ ragEnabled: !conversation.ragEnabled }),
+      body: JSON.stringify(patch),
     });
     const data = await res.json();
     setConversation(data.conversation);
@@ -52,22 +53,35 @@ export default function ConversationPage({ params }: { params: Promise<{ id: str
 
   return (
     <div className="flex flex-col h-full">
-      <div className="flex items-center justify-between border-b border-neutral-900 px-5 py-3">
-        <div className="text-sm text-neutral-300">
+      <div className="flex items-center justify-between border-b px-5 py-3" style={{ borderColor: "var(--border)" }}>
+        <div className="text-sm text-ink-dim truncate">
           {conversation ? (
             <>
-              <span className="text-neutral-500">[{conversation.backend}]</span>{" "}
-              {conversation.modelId}
+              <span className="text-accent">[{conversation.backend}]</span> {conversation.modelId}
             </>
           ) : (
             "Loading…"
           )}
         </div>
         {conversation && (
-          <label className="flex items-center gap-2 text-xs text-neutral-400">
-            <input type="checkbox" checked={conversation.ragEnabled} onChange={toggleRag} />
-            Use Brain (RAG)
-          </label>
+          <div className="flex items-center gap-4 shrink-0">
+            <label className="flex items-center gap-1.5 text-xs text-ink-dim">
+              <input
+                type="checkbox"
+                checked={conversation.ragEnabled}
+                onChange={() => toggle({ ragEnabled: !conversation.ragEnabled })}
+              />
+              Brain
+            </label>
+            <label className="flex items-center gap-1.5 text-xs text-ink-dim">
+              <input
+                type="checkbox"
+                checked={conversation.wikiEnabled}
+                onChange={() => toggle({ wikiEnabled: !conversation.wikiEnabled })}
+              />
+              Wikipedia
+            </label>
+          </div>
         )}
       </div>
 

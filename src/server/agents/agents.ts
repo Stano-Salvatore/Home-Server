@@ -8,14 +8,27 @@ export type Agent = {
   modelTag: string; // Ollama tag, e.g. "scriptoria:latest" — resolved to a node at launch
   systemPrompt?: string;
   description?: string;
+  wikiDefault?: boolean; // start conversations with Wikipedia grounding on
 };
 
 const AGENTS_KEY = "agents";
 
 /** Persona defaults: if a node has a model whose tag contains the keyword,
  *  seed a matching agent on first load. */
-const PERSONA_SEEDS: { keyword: string; name: string; emoji: string; description: string }[] = [
-  { keyword: "scriptoria", name: "Athena", emoji: "🦉", description: "Local book & knowledge base" },
+const PERSONA_SEEDS: {
+  keyword: string;
+  name: string;
+  emoji: string;
+  description: string;
+  wikiDefault?: boolean;
+}[] = [
+  {
+    keyword: "scriptoria",
+    name: "Athena",
+    emoji: "🦉",
+    description: "Local book & knowledge base",
+    wikiDefault: true,
+  },
   { keyword: "emergi", name: "Emergi", emoji: "❤️‍🩹", description: "Biometric health feedback" },
   { keyword: "gemmi", name: "Gemmi", emoji: "⚙️", description: "SysOps logging & precision" },
 ];
@@ -39,6 +52,21 @@ export function migrateAgentEmojis() {
   }
   if (changed) saveAgents(agents);
   setSetting("agents_emoji_v2", "1");
+}
+
+/** One-time: turn on Wikipedia grounding for the seeded Athena persona. */
+export function migrateAgentWikiDefault() {
+  if (getSetting("agents_wiki_v1")) return;
+  const agents = listAgents();
+  let changed = false;
+  for (const a of agents) {
+    if (a.name === "Athena" && a.wikiDefault === undefined) {
+      a.wikiDefault = true;
+      changed = true;
+    }
+  }
+  if (changed) saveAgents(agents);
+  setSetting("agents_wiki_v1", "1");
 }
 
 export function listAgents(): Agent[] {
@@ -94,6 +122,7 @@ export function seedAgentsFromTags(installedTags: string[]): Agent[] {
         emoji: seed.emoji,
         modelTag: tag,
         description: seed.description,
+        wikiDefault: seed.wikiDefault,
       });
     }
   }

@@ -4,7 +4,14 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { ModelOption } from "@/lib/types";
 
-type Agent = { id: string; name: string; emoji: string; modelTag: string; systemPrompt?: string };
+type Agent = {
+  id: string;
+  name: string;
+  emoji: string;
+  modelTag: string;
+  systemPrompt?: string;
+  wikiDefault?: boolean;
+};
 type BrainDoc = { id: string; title: string; sourceType: string };
 
 type Node = {
@@ -53,6 +60,7 @@ export function GraphTab() {
           modelId: opt.id,
           title: `${agent.emoji} ${agent.name}`,
           systemPrompt: agent.systemPrompt || undefined,
+          wikiEnabled: agent.wikiDefault ?? false,
         }),
       });
       const data = await res.json();
