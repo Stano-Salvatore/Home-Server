@@ -53,6 +53,19 @@ nedory update   # git pull + rebuild, then start
 On a separate compute device (e.g. an S21 running Ollama + Kiwix), `bin/nedory-node`
 boots those services with one command — see the comments in that file.
 
+### Offline Wikipedia (Kiwix)
+
+On the compute phone, grab the ZIM files without wrestling with `curl | grep` quoting:
+
+```bash
+get-zim                          # list the EN/CS Wikipedia flavors available now
+get-zim wikipedia_cs_all_nopic   # download the newest match (resumable) into ~/zim
+```
+
+`get-zim` (in `bin/`) takes a flavor name *without* the trailing date and picks the
+latest. `nedory` then auto-serves `~/zim/*.zim` on `:8080`; point Settings → Kiwix URL
+at `http://<that-phone-ip>:8080` and set Wikipedia grounding to **Offline**.
+
 ## Building for production
 
 ```bash

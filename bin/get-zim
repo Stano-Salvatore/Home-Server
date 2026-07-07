@@ -1,0 +1,54 @@
+#!/usr/bin/env bash
+# get-zim — list or download Kiwix Wikipedia ZIMs into ~/zim for offline Wikipedia.
+# Meant to be run on the compute phone (the S21) that also runs Ollama + kiwix-serve.
+#
+#   get-zim                          list the EN/CS Wikipedia flavors available now
+#   get-zim wikipedia_cs_all_nopic   download the NEWEST matching ZIM (resumable)
+#
+# No fragile one-liners: pass a name WITHOUT the trailing _YYYY-MM date and this
+# picks the latest for you. Downloads resume on re-run, which matters on a phone.
+#
+# Install once:
+#   chmod +x ~/Home-Server/bin/get-zim
+#   ln -sf ~/Home-Server/bin/get-zim "$PREFIX/bin/get-zim"   # Termux
+set -e
+
+BASE="https://download.kiwix.org/zim/wikipedia/"
+DEST="$HOME/zim"
+mkdir -p "$DEST"
+
+# Pull the directory index and extract the real, dated .zim filenames from it.
+list_zims() {
+  curl -fsSL "$BASE" | grep -oE 'wikipedia_[a-z]+_[A-Za-z0-9_.-]+\.zim' | sort -u
+}
+
+if [ -z "$1" ]; then
+  echo "◢ EN / CS Wikipedia ZIMs available now (name — pass it without the date):"
+  echo
+  list_zims | grep -E '^wikipedia_(en|cs)_' | grep -E 'nopic|maxi|mini' || {
+    echo "  (couldn't reach $BASE — check the S21's internet)"; exit 1;
+  }
+  echo
+  echo "  Then, e.g.:  get-zim wikipedia_cs_all_nopic"
+  echo "  Good picks:  wikipedia_cs_all_nopic  (whole Czech WP, small)"
+  echo "               wikipedia_en_100_nopic  (top ~100k EN articles, ~hundreds of MB)"
+  echo "               wikipedia_en_all_nopic  (all of EN, tens of GB — only if you have room)"
+  exit 0
+fi
+
+PREFIX="$1"
+FILE="$(list_zims | grep -E "^${PREFIX}_[0-9]{4}-[0-9]{2}\.zim$" | sort | tail -1)"
+if [ -z "$FILE" ]; then
+  echo "◢ No ZIM matching '${PREFIX}'. Run 'get-zim' with no args to see valid names."
+  exit 1
+fi
+
+echo "◢ downloading $FILE"
+echo "  → $DEST   (resumable: if it stops, just run the same command again)"
+cd "$DEST"
+# -C - resumes a partial file, -L follows the mirror redirect, -O keeps the name.
+curl -fL -C - -O "${BASE}${FILE}"
+
+echo
+echo "◢ done. Serve it with:  nedory        (auto-serves ~/zim/*.zim on :8080)"
+echo "  Then in the dashboard: Settings → Wikipedia = Offline, Kiwix URL = http://<S21-ip>:8080"
