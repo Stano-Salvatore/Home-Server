@@ -20,11 +20,29 @@ export function DocumentsTab() {
   const [title, setTitle] = useState("");
   const [content, setContent] = useState("");
   const [adding, setAdding] = useState(false);
+  const [rescanning, setRescanning] = useState(false);
+  const [rescanMsg, setRescanMsg] = useState<string | null>(null);
 
   function refresh() {
     fetch("/api/brain/documents")
       .then((r) => r.json())
       .then((data) => setDocuments(data.documents ?? []));
+  }
+
+  async function rescanVault() {
+    setRescanning(true);
+    setRescanMsg(null);
+    try {
+      const res = await fetch("/api/obsidian/rescan", { method: "POST" });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Rescan failed");
+      setRescanMsg(`Vault rescanned — ${data.indexed} of ${data.total} notes updated.`);
+      refresh();
+    } catch (err) {
+      setRescanMsg(err instanceof Error ? err.message : String(err));
+    } finally {
+      setRescanning(false);
+    }
   }
 
   useEffect(() => {
@@ -72,7 +90,23 @@ export function DocumentsTab() {
   return (
     <div className="flex flex-col gap-4">
       <Card className="p-4">
-        <h3 className="text-sm font-semibold text-neutral-200 mb-2">Add a note manually</h3>
+        <div className="flex items-center justify-between">
+          <div>
+            <h3 className="text-sm font-semibold text-ink">Obsidian vault</h3>
+            <p className="text-xs text-ink-dim mt-0.5">
+              Re-index your vault after editing notes on-device (Android storage doesn&apos;t always
+              notify automatically).
+            </p>
+          </div>
+          <Button variant="secondary" onClick={rescanVault} disabled={rescanning}>
+            {rescanning ? "Rescanning…" : "Rescan vault"}
+          </Button>
+        </div>
+        {rescanMsg && <p className="text-xs text-ink-dim mt-2">{rescanMsg}</p>}
+      </Card>
+
+      <Card className="p-4">
+        <h3 className="text-sm font-semibold text-ink mb-2">Add a note manually</h3>
         <div className="flex flex-col gap-2">
           <input
             className="rounded bg-neutral-950 border border-neutral-800 px-2 py-1.5 text-sm"

@@ -16,9 +16,30 @@ const AGENTS_KEY = "agents";
  *  seed a matching agent on first load. */
 const PERSONA_SEEDS: { keyword: string; name: string; emoji: string; description: string }[] = [
   { keyword: "scriptoria", name: "Athena", emoji: "🦉", description: "Local book & knowledge base" },
-  { keyword: "emergi", name: "Emergi", emoji: "🚑", description: "Biometric health feedback" },
-  { keyword: "gemmi", name: "Gemmi", emoji: "💎", description: "SysOps logging & precision" },
+  { keyword: "emergi", name: "Emergi", emoji: "❤️‍🩹", description: "Biometric health feedback" },
+  { keyword: "gemmi", name: "Gemmi", emoji: "⚙️", description: "SysOps logging & precision" },
 ];
+
+/** One-time reconcile so agents seeded with the old emoji defaults pick up the
+ *  new ones — but only if the user hasn't customized them. */
+export function migrateAgentEmojis() {
+  if (getSetting("agents_emoji_v2")) return;
+  const updates: Record<string, { from: string; to: string }> = {
+    Emergi: { from: "🚑", to: "❤️‍🩹" },
+    Gemmi: { from: "💎", to: "⚙️" },
+  };
+  const agents = listAgents();
+  let changed = false;
+  for (const a of agents) {
+    const u = updates[a.name];
+    if (u && a.emoji === u.from) {
+      a.emoji = u.to;
+      changed = true;
+    }
+  }
+  if (changed) saveAgents(agents);
+  setSetting("agents_emoji_v2", "1");
+}
 
 export function listAgents(): Agent[] {
   const raw = getSetting(AGENTS_KEY);

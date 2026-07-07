@@ -76,6 +76,51 @@ export async function restartVaultWatcher(vaultPath: string) {
   startVaultWatcher(vaultPath);
 }
 
+function walkMarkdown(dir: string): string[] {
+  const out: string[] = [];
+  let entries: fs.Dirent[];
+  try {
+    entries = fs.readdirSync(dir, { withFileTypes: true });
+  } catch {
+    return out;
+  }
+  for (const entry of entries) {
+    if (entry.name.startsWith(".")) continue;
+    const full = path.join(dir, entry.name);
+    if (entry.isDirectory()) out.push(...walkMarkdown(full));
+    else if (entry.name.endsWith(".md")) out.push(full);
+  }
+  return out;
+}
+
+/**
+ * Manually re-index the whole vault. Needed on Android/Termux, where shared
+ * storage often doesn't emit inotify events, so the live watcher can miss
+ * edits made in the Obsidian app. Hash-gated ingest makes this cheap to repeat.
+ */
+export async function rescanVault(vaultPath: string): Promise<{ total: number; indexed: number }> {
+  const files = walkMarkdown(vaultPath);
+  let indexed = 0;
+  for (const file of files) {
+    try {
+      const raw = fs.readFileSync(file, "utf-8");
+      const { data, content } = matter(raw);
+      const filenameTitle = path.basename(file).replace(/\.md$/, "");
+      const title = typeof data.title === "string" ? data.title : filenameTitle;
+      const { unchanged } = await ingestDocument({
+        sourceType: "obsidian",
+        sourcePath: file,
+        title,
+        content: content.trim() || raw,
+      });
+      if (!unchanged) indexed++;
+    } catch (err) {
+      console.error(`[obsidian] rescan failed for ${file}:`, err);
+    }
+  }
+  return { total: files.length, indexed };
+}
+
 export function getWatchedVaultPath() {
   return globalThis.__homeServerWatchedVaultPath ?? null;
 }

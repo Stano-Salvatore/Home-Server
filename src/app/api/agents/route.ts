@@ -1,10 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
-import { listAgents, addAgent, updateAgent, deleteAgent, seedAgentsFromTags } from "@/server/agents/agents";
+import { listAgents, addAgent, updateAgent, deleteAgent, seedAgentsFromTags, migrateAgentEmojis } from "@/server/agents/agents";
 import { probeNodes } from "@/server/backends/registry";
 
 export const runtime = "nodejs";
 
 export async function GET() {
+  migrateAgentEmojis();
   let agents = listAgents();
   if (agents.length === 0) {
     // First run: seed persona agents from whatever models are on the nodes.
