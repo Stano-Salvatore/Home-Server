@@ -3,13 +3,18 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
-    "build": "next build",
+    "dev": "next dev --webpack",
+    "build": "next build --webpack",
     "start": "next start",
     "lint": "eslint"
   },
+  "engines": {
+    "node": ">=24"
+  },
+  "overrides": {
+    "better-sqlite3": "file:./vendor/better-sqlite3-stub"
+  },
   "dependencies": {
-    "better-sqlite3": "^12.11.1",
     "chokidar": "^5.0.0",
     "drizzle-orm": "^0.45.2",
     "epub2": "^3.0.2",
@@ -21,7 +26,6 @@
     "pdf-parse": "^2.4.5",
     "react": "19.2.4",
     "react-dom": "19.2.4",
-    "sharp": "^0.35.3",
     "systeminformation": "^5.31.13",
     "zod": "^4.4.3"
   },

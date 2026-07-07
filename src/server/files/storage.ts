@@ -1,7 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
 import { eq } from "drizzle-orm";
-import sharp from "sharp";
 import { db } from "@/server/db/client";
 import { files } from "@/server/db/schema";
 import { loadSettings } from "@/server/settings/config";
@@ -51,7 +50,6 @@ export async function saveUploadedFile(opts: {
   buffer: Buffer;
 }): Promise<typeof files.$inferSelect> {
   const { uploadsPath } = loadSettings();
-  const thumbsDir = path.join(uploadsPath, "thumbs");
   fs.mkdirSync(uploadsPath, { recursive: true });
 
   const id = newId("file");
@@ -62,17 +60,10 @@ export async function saveUploadedFile(opts: {
 
   const kind = kindForMime(opts.mimeType);
 
-  let thumbnailPath: string | null = null;
-  if (kind === "image") {
-    try {
-      fs.mkdirSync(thumbsDir, { recursive: true });
-      const thumbPath = path.join(thumbsDir, `${id}.jpg`);
-      await sharp(opts.buffer).resize(300, 300, { fit: "inside" }).jpeg().toFile(thumbPath);
-      thumbnailPath = thumbPath;
-    } catch (err) {
-      console.error(`[files] failed to generate thumbnail for ${opts.originalName}:`, err);
-    }
-  }
+  // No server-side thumbnailing (that needed the native `sharp` module, which
+  // can't build on Android/Termux). Images render from the full-content
+  // endpoint instead — the browser scales them down in the grid.
+  const thumbnailPath: string | null = null;
 
   let brainDocumentId: string | null = null;
   if (kind === "document") {

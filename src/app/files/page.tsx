@@ -99,7 +99,7 @@ export default function FilesPage() {
                 {file.kind === "image" ? (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img
-                    src={`/api/files/${file.id}/thumbnail`}
+                    src={`/api/files/${file.id}/content`}
                     alt={file.originalName}
                     className="w-full h-full object-cover"
                   />
