@@ -28,12 +28,26 @@ export const llamacppServers = sqliteTable("llamacpp_servers", {
     .default(sql`(unixepoch())`),
 });
 
+export const projects = sqliteTable("projects", {
+  id: text("id").primaryKey(),
+  name: text("name").notNull(),
+  emoji: text("emoji"),
+  instructions: text("instructions"), // becomes the system prompt for chats in this project
+  createdAt: integer("created_at")
+    .notNull()
+    .default(sql`(unixepoch())`),
+  updatedAt: integer("updated_at")
+    .notNull()
+    .default(sql`(unixepoch())`),
+});
+
 export const conversations = sqliteTable("conversations", {
   id: text("id").primaryKey(),
   title: text("title").notNull().default("New Chat"),
   backend: text("backend").notNull(), // ollama | llamacpp
   modelId: text("model_id").notNull(),
   systemPrompt: text("system_prompt"),
+  projectId: text("project_id").references(() => projects.id, { onDelete: "set null" }),
   ragEnabled: integer("rag_enabled", { mode: "boolean" }).notNull().default(false),
   wikiEnabled: integer("wiki_enabled", { mode: "boolean" }).notNull().default(false),
   createdAt: integer("created_at")
@@ -65,9 +79,11 @@ export const brainDocuments = sqliteTable(
   "brain_documents",
   {
     id: text("id").primaryKey(),
-    sourceType: text("source_type").notNull(), // obsidian | library | upload | manual
+    sourceType: text("source_type").notNull(), // obsidian | library | upload | manual | chat
     sourcePath: text("source_path").notNull(),
     title: text("title").notNull(),
+    // null = global knowledge; set = memory scoped to (and isolated within) a project
+    projectId: text("project_id").references(() => projects.id, { onDelete: "cascade" }),
     contentHash: text("content_hash").notNull(),
     indexedAt: integer("indexed_at")
       .notNull()

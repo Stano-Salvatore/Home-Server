@@ -36,6 +36,7 @@ const SOURCE_COLOR: Record<string, string> = {
   library: "#9cdef2",
   upload: "#f0ad4e",
   manual: "#8a8d96",
+  chat: "#e06c75",
 };
 
 export function GraphTab() {
@@ -380,6 +381,7 @@ export function GraphTab() {
           <span><span style={{ color: SOURCE_COLOR.library }}>●</span> library</span>
           <span><span style={{ color: SOURCE_COLOR.upload }}>●</span> upload</span>
           <span><span style={{ color: SOURCE_COLOR.manual }}>●</span> manual</span>
+          <span><span style={{ color: SOURCE_COLOR.chat }}>●</span> chat</span>
         </div>
       </div>
     </div>

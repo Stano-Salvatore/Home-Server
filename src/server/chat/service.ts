@@ -23,6 +23,7 @@ export function createConversation(opts: {
   modelId: string;
   title?: string;
   systemPrompt?: string;
+  projectId?: string | null;
   ragEnabled?: boolean;
   wikiEnabled?: boolean;
 }) {
@@ -34,6 +35,7 @@ export function createConversation(opts: {
       backend: opts.backend,
       modelId: opts.modelId,
       systemPrompt: opts.systemPrompt ?? null,
+      projectId: opts.projectId ?? null,
       ragEnabled: opts.ragEnabled ?? false,
       wikiEnabled: opts.wikiEnabled ?? false,
     })
@@ -71,10 +73,14 @@ function getMemoryContext(): string | null {
   return facts.map((f) => `- ${f.content}`).join("\n");
 }
 
-async function getRagContext(query: string): Promise<{ block: string; citations: Citation[] } | null> {
+async function getRagContext(
+  query: string,
+  projectId: string | null,
+): Promise<{ block: string; citations: Citation[] } | null> {
   try {
     const { searchBrain } = await import("@/server/brain/search");
-    const hits = await searchBrain(query, 5);
+    const { knowledgeFilter } = await import("@/server/brain/chatMemory");
+    const hits = await searchBrain(query, 5, { filter: knowledgeFilter(projectId) });
     if (hits.length === 0) return null;
     const block = hits
       .map((h, i) => `[${i + 1}] (${h.title}) ${h.content}`)
@@ -86,6 +92,21 @@ async function getRagContext(query: string): Promise<{ block: string; citations:
       snippet: h.content.slice(0, 200),
     }));
     return { block, citations };
+  } catch {
+    return null;
+  }
+}
+
+/** Always-on: recall relevant snippets from past conversations (project-scoped). */
+async function getChatMemoryContext(
+  query: string,
+  conversation: { id: string; projectId: string | null },
+): Promise<string | null> {
+  try {
+    const { recallChatMemory } = await import("@/server/brain/chatMemory");
+    const hits = await recallChatMemory(query, conversation);
+    if (hits.length === 0) return null;
+    return hits.map((h) => `- ${h.content}`).join("\n");
   } catch {
     return null;
   }
@@ -135,13 +156,22 @@ export async function* sendMessage(
   if (memoryBlock) {
     chatMessages.push({
       role: "system",
-      content: `Things you know about the user from past conversations:\n\n${memoryBlock}`,
+      content: `Pinned facts about the user:\n\n${memoryBlock}`,
+    });
+  }
+
+  // Always-on long-term memory: recall relevant snippets from past chats.
+  const recall = await getChatMemoryContext(userContent, conversation);
+  if (recall) {
+    chatMessages.push({
+      role: "system",
+      content: `Relevant memory from earlier conversations (use if helpful, don't force it):\n\n${recall}`,
     });
   }
 
   const citationList: Citation[] = [];
   if (conversation.ragEnabled) {
-    const rag = await getRagContext(userContent);
+    const rag = await getRagContext(userContent, conversation.projectId);
     if (rag) {
       citationList.push(...rag.citations);
       chatMessages.push({
@@ -175,9 +205,10 @@ export async function* sendMessage(
     }
   } finally {
     if (full) {
+      const assistantId = newId("msg");
       db.insert(messages)
         .values({
-          id: newId("msg"),
+          id: assistantId,
           conversationId,
           role: "assistant",
           content: full,
@@ -188,6 +219,22 @@ export async function* sendMessage(
         .set({ updatedAt: Date.now() / 1000 })
         .where(eq(conversations.id, conversationId))
         .run();
+
+      // Remember this exchange so future chats can recall it. Best-effort;
+      // never let a memory-write failure surface to the streaming caller.
+      try {
+        const { rememberChatTurn } = await import("@/server/brain/chatMemory");
+        await rememberChatTurn({
+          conversationId,
+          messageId: assistantId,
+          title: conversation.title,
+          projectId: conversation.projectId,
+          userContent,
+          assistantContent: full,
+        });
+      } catch (err) {
+        console.error("[chat] remember turn failed:", err);
+      }
     }
   }
 

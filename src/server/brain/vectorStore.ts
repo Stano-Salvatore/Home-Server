@@ -1,7 +1,13 @@
 import { db } from "@/server/db/client";
-import { brainChunks } from "@/server/db/schema";
+import { brainChunks, brainDocuments } from "@/server/db/schema";
 
-type IndexedChunk = {
+export type ChunkMeta = {
+  projectId: string | null;
+  sourceType: string;
+  conversationId: string | null; // set only for chat-memory chunks
+};
+
+type IndexedChunk = ChunkMeta & {
   id: string;
   documentId: string;
   embedding: Float32Array;
@@ -38,14 +44,38 @@ function bufferToFloats(buf: Buffer): Float32Array {
   return new Float32Array(copy.buffer, copy.byteOffset, copy.byteLength / 4);
 }
 
+// A chat-memory document's sourcePath is `chat:{conversationId}:{messageId}`.
+export function conversationIdOf(sourceType: string, sourcePath: string): string | null {
+  if (sourceType !== "chat") return null;
+  const parts = sourcePath.split(":");
+  return parts[1] ?? null;
+}
+
 export function loadVectorIndex() {
-  const rows = db.select().from(brainChunks).all();
+  const chunkRows = db.select().from(brainChunks).all();
+  const docRows = db.select().from(brainDocuments).all();
+  const metaByDoc = new Map(
+    docRows.map((d) => [
+      d.id,
+      {
+        projectId: d.projectId ?? null,
+        sourceType: d.sourceType,
+        conversationId: conversationIdOf(d.sourceType, d.sourcePath),
+      } as ChunkMeta,
+    ]),
+  );
   const s = state();
-  s.chunks = rows.map((r) => ({
-    id: r.id,
-    documentId: r.documentId,
-    embedding: bufferToFloats(r.embedding),
-  }));
+  s.chunks = chunkRows.map((r) => {
+    const meta = metaByDoc.get(r.documentId);
+    return {
+      id: r.id,
+      documentId: r.documentId,
+      embedding: bufferToFloats(r.embedding),
+      projectId: meta?.projectId ?? null,
+      sourceType: meta?.sourceType ?? "manual",
+      conversationId: meta?.conversationId ?? null,
+    };
+  });
   s.loaded = true;
   console.log(`[brain] vector index loaded (${s.chunks.length} chunks)`);
 }
@@ -54,13 +84,23 @@ function ensureLoaded() {
   if (!state().loaded) loadVectorIndex();
 }
 
-export function addToIndex(chunks: { id: string; documentId: string; embedding: number[] }[]) {
+export function addToIndex(
+  chunks: { id: string; documentId: string; embedding: number[] }[],
+  meta: ChunkMeta,
+) {
   ensureLoaded();
   const s = state();
   const existingIds = new Set(s.chunks.map((c) => c.id));
   for (const c of chunks) {
     if (existingIds.has(c.id)) continue; // ensureLoaded() may have just picked this row up from the DB
-    s.chunks.push({ id: c.id, documentId: c.documentId, embedding: new Float32Array(c.embedding) });
+    s.chunks.push({
+      id: c.id,
+      documentId: c.documentId,
+      embedding: new Float32Array(c.embedding),
+      projectId: meta.projectId,
+      sourceType: meta.sourceType,
+      conversationId: meta.conversationId,
+    });
   }
 }
 
@@ -84,11 +124,17 @@ function cosineSimilarity(a: Float32Array, b: Float32Array): number {
   return dot / (Math.sqrt(normA) * Math.sqrt(normB));
 }
 
-export function searchIndex(queryEmbedding: number[], topK: number): { id: string; documentId: string; score: number }[] {
+export function searchIndex(
+  queryEmbedding: number[],
+  topK: number,
+  filter?: (meta: ChunkMeta) => boolean,
+): { id: string; documentId: string; score: number }[] {
   ensureLoaded();
   const query = new Float32Array(queryEmbedding);
-  return state()
-    .chunks.map((c) => ({ id: c.id, documentId: c.documentId, score: cosineSimilarity(query, c.embedding) }))
+  let chunks = state().chunks;
+  if (filter) chunks = chunks.filter(filter);
+  return chunks
+    .map((c) => ({ id: c.id, documentId: c.documentId, score: cosineSimilarity(query, c.embedding) }))
     .sort((a, b) => b.score - a.score)
     .slice(0, topK);
 }

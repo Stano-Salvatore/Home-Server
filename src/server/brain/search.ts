@@ -2,7 +2,7 @@ import { inArray } from "drizzle-orm";
 import { db } from "@/server/db/client";
 import { brainChunks, brainDocuments } from "@/server/db/schema";
 import { embedQuery } from "./embeddings";
-import { searchIndex } from "./vectorStore";
+import { searchIndex, type ChunkMeta } from "./vectorStore";
 
 export type SearchHit = {
   documentId: string;
@@ -12,9 +12,14 @@ export type SearchHit = {
   score: number;
 };
 
-export async function searchBrain(query: string, topK = 5): Promise<SearchHit[]> {
+export async function searchBrain(
+  query: string,
+  topK = 5,
+  opts?: { filter?: (meta: ChunkMeta) => boolean; minScore?: number },
+): Promise<SearchHit[]> {
   const queryEmbedding = await embedQuery(query);
-  const hits = searchIndex(queryEmbedding, topK);
+  let hits = searchIndex(queryEmbedding, topK, opts?.filter);
+  if (opts?.minScore != null) hits = hits.filter((h) => h.score >= opts.minScore!);
   if (hits.length === 0) return [];
 
   const chunkRows = db

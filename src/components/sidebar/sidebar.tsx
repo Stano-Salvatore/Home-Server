@@ -10,12 +10,14 @@ import {
   Library,
   ListChecks,
   FolderOpenDot,
+  FolderKanban,
   Server,
   Settings,
 } from "lucide-react";
 
 const NAV_ITEMS = [
   { href: "/chat", label: "chat", icon: MessageSquare },
+  { href: "/projects", label: "projects", icon: FolderKanban },
   { href: "/agents", label: "agents", icon: Bot },
   { href: "/brain", label: "brain", icon: BrainCircuit },
   { href: "/cookbook", label: "cookbook", icon: ChefHat },

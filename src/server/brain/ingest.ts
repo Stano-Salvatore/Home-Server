@@ -3,10 +3,10 @@ import { db } from "@/server/db/client";
 import { brainDocuments, brainChunks } from "@/server/db/schema";
 import { chunkText, estimateTokenCount } from "./chunker";
 import { embedTexts } from "./embeddings";
-import { addToIndex, removeDocumentFromIndex, floatsToBuffer } from "./vectorStore";
+import { addToIndex, removeDocumentFromIndex, floatsToBuffer, conversationIdOf } from "./vectorStore";
 import { sha1, newId } from "@/server/util/hash";
 
-export type IngestSourceType = "obsidian" | "library" | "upload" | "manual";
+export type IngestSourceType = "obsidian" | "library" | "upload" | "manual" | "chat";
 
 export function getDocumentBySourcePath(sourcePath: string) {
   return db.select().from(brainDocuments).where(eq(brainDocuments.sourcePath, sourcePath)).get();
@@ -30,6 +30,7 @@ export async function ingestDocument(opts: {
   sourcePath: string;
   title: string;
   content: string;
+  projectId?: string | null;
 }): Promise<{ document: typeof brainDocuments.$inferSelect; unchanged: boolean }> {
   const contentHash = sha1(opts.content);
   const existing = getDocumentBySourcePath(opts.sourcePath);
@@ -61,6 +62,7 @@ export async function ingestDocument(opts: {
         sourceType: opts.sourceType,
         sourcePath: opts.sourcePath,
         title: opts.title,
+        projectId: opts.projectId ?? null,
         contentHash,
       })
       .run();
@@ -81,6 +83,11 @@ export async function ingestDocument(opts: {
 
   addToIndex(
     chunkRows.map((row, i) => ({ id: row.id, documentId, embedding: embeddings[i] })),
+    {
+      projectId: opts.projectId ?? null,
+      sourceType: opts.sourceType,
+      conversationId: conversationIdOf(opts.sourceType, opts.sourcePath),
+    },
   );
 
   return { document: getDocument(documentId)!, unchanged: false };
