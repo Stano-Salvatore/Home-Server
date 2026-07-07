@@ -10,9 +10,11 @@
 command -v termux-wake-lock >/dev/null 2>&1 && termux-wake-lock || true
 
 # Ollama, reachable across the network (Tailscale / LAN), not just localhost.
+# OLLAMA_KEEP_ALIVE=30m keeps the model resident in RAM instead of unloading
+# after 5 min idle — that reload is what makes the first message feel slow on a phone.
 if ! pgrep -f "ollama serve" >/dev/null 2>&1; then
-  OLLAMA_HOST=0.0.0.0:11434 nohup ollama serve >"$HOME/ollama.log" 2>&1 &
-  echo "◢ ollama serving on 0.0.0.0:11434"
+  OLLAMA_HOST=0.0.0.0:11434 OLLAMA_KEEP_ALIVE=30m nohup ollama serve >"$HOME/ollama.log" 2>&1 &
+  echo "◢ ollama serving on 0.0.0.0:11434 (models kept warm 30m)"
 else
   echo "◢ ollama already running"
 fi
