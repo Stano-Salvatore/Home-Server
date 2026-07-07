@@ -20,7 +20,7 @@ const NAV_ITEMS = [
   { href: "/brain", label: "brain", icon: BrainCircuit },
   { href: "/cookbook", label: "cookbook", icon: ChefHat },
   { href: "/nodes", label: "nodes", icon: Server },
-  { href: "/library", label: "library", icon: Library },
+  { href: "/library", label: "bibliotheca", icon: Library },
   { href: "/tasks", label: "tasks", icon: ListChecks },
   { href: "/files", label: "files", icon: FolderOpenDot },
   { href: "/settings", label: "settings", icon: Settings },

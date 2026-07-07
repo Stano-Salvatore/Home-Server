@@ -7,6 +7,7 @@ import {
   seedAgentsFromTags,
   migrateAgentEmojis,
   migrateAgentWikiDefault,
+  migrateAgentColors,
 } from "@/server/agents/agents";
 import { probeNodes } from "@/server/backends/registry";
 
@@ -15,6 +16,7 @@ export const runtime = "nodejs";
 export async function GET() {
   migrateAgentEmojis();
   migrateAgentWikiDefault();
+  migrateAgentColors();
   let agents = listAgents();
   if (agents.length === 0) {
     // First run: seed persona agents from whatever models are on the nodes.

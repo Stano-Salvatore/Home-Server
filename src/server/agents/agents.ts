@@ -9,9 +9,14 @@ export type Agent = {
   systemPrompt?: string;
   description?: string;
   wikiDefault?: boolean; // start conversations with Wikipedia grounding on
+  color?: string; // node ring color in the Brain graph
 };
 
 const AGENTS_KEY = "agents";
+
+const ATHENA_GOLD = "#f0ad4e";
+const EMERGI_GREEN = "#50fa7b";
+const GEMMI_BLUE = "#5aa0f0";
 
 /** Persona defaults: if a node has a model whose tag contains the keyword,
  *  seed a matching agent on first load. */
@@ -21,6 +26,7 @@ const PERSONA_SEEDS: {
   emoji: string;
   description: string;
   wikiDefault?: boolean;
+  color: string;
 }[] = [
   {
     keyword: "scriptoria",
@@ -28,9 +34,22 @@ const PERSONA_SEEDS: {
     emoji: "🦉",
     description: "Local book & knowledge base",
     wikiDefault: true,
+    color: ATHENA_GOLD,
   },
-  { keyword: "emergi", name: "Emergi", emoji: "❤️‍🩹", description: "Biometric health feedback" },
-  { keyword: "gemmi", name: "Gemmi", emoji: "⚙️", description: "SysOps logging & precision" },
+  {
+    keyword: "emergi",
+    name: "Emergi",
+    emoji: "❤️‍🩹",
+    description: "Biometric health feedback",
+    color: EMERGI_GREEN,
+  },
+  {
+    keyword: "gemmi",
+    name: "Gemmi",
+    emoji: "⚙️",
+    description: "SysOps logging & precision",
+    color: GEMMI_BLUE,
+  },
 ];
 
 /** One-time reconcile so agents seeded with the old emoji defaults pick up the
@@ -67,6 +86,26 @@ export function migrateAgentWikiDefault() {
   }
   if (changed) saveAgents(agents);
   setSetting("agents_wiki_v1", "1");
+}
+
+/** One-time: give the persona agents their graph colors. */
+export function migrateAgentColors() {
+  if (getSetting("agents_color_v1")) return;
+  const byName: Record<string, string> = {
+    Athena: ATHENA_GOLD,
+    Emergi: EMERGI_GREEN,
+    Gemmi: GEMMI_BLUE,
+  };
+  const agents = listAgents();
+  let changed = false;
+  for (const a of agents) {
+    if (!a.color && byName[a.name]) {
+      a.color = byName[a.name];
+      changed = true;
+    }
+  }
+  if (changed) saveAgents(agents);
+  setSetting("agents_color_v1", "1");
 }
 
 export function listAgents(): Agent[] {
@@ -123,6 +162,7 @@ export function seedAgentsFromTags(installedTags: string[]): Agent[] {
         modelTag: tag,
         description: seed.description,
         wikiDefault: seed.wikiDefault,
+        color: seed.color,
       });
     }
   }

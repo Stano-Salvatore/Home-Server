@@ -80,8 +80,10 @@ export default function LibraryPage() {
     <div className="p-8">
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-xl font-semibold text-neutral-100 mb-1">Library</h1>
-          <p className="text-sm text-neutral-500">
+          <h1 className="text-xl font-semibold text-ink mb-1">
+            Bibliotheca <span className="text-ink-dim text-sm font-normal">· Athena&apos;s library</span>
+          </h1>
+          <p className="text-sm text-ink-dim">
             Drop epub/pdf files into your configured library folder, then rescan.
           </p>
         </div>

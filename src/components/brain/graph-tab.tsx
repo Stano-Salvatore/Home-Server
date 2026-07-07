@@ -11,6 +11,7 @@ type Agent = {
   modelTag: string;
   systemPrompt?: string;
   wikiDefault?: boolean;
+  color?: string;
 };
 type BrainDoc = { id: string; title: string; sourceType: string };
 
@@ -109,7 +110,7 @@ export function GraphTab() {
           kind: "agent",
           label: a.name,
           emoji: a.emoji,
-          color: "#e06c75",
+          color: a.color ?? "#e06c75",
           r: 20,
           x: cx + rand(180),
           y: cy + rand(180),
@@ -261,9 +262,13 @@ export function GraphTab() {
         } else {
           ctx.fillStyle = "#131417";
           ctx.fill();
+          ctx.save();
           ctx.strokeStyle = n.color;
-          ctx.lineWidth = 1.5;
+          ctx.lineWidth = n.kind === "agent" ? 3 : 2;
+          ctx.shadowColor = n.color;
+          ctx.shadowBlur = n.kind === "agent" ? 10 : 0;
           ctx.stroke();
+          ctx.restore();
           ctx.font = `${n.r + 4}px sans-serif`;
           ctx.textAlign = "center";
           ctx.textBaseline = "middle";
