@@ -115,9 +115,13 @@ async function* streamChat(
   }
 }
 
-export async function embed(texts: string[], model: string): Promise<number[][]> {
-  // Embeddings run on the default node.
-  const host = clean(defaultNode().url);
+export async function embed(
+  texts: string[],
+  model: string,
+  hostOverride?: string,
+): Promise<number[][]> {
+  // Embeddings run on the configured embedding host, else the default node.
+  const host = clean(hostOverride?.trim() || defaultNode().url);
   const results: number[][] = [];
   for (const text of texts) {
     const res = await fetch(`${host}/api/embeddings`, {

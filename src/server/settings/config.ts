@@ -12,6 +12,10 @@ const AppConfigSchema = z.object({
   llamaCppBinPath: z.string().default("llama-server"),
   ollamaHost: z.string().default("http://127.0.0.1:11434"),
   embeddingModel: z.string().default("nomic-embed-text"),
+  // Where embeddings run. Blank = the default chat node. Set this to a separate
+  // Ollama (e.g. the dashboard phone's own localhost) to keep the embedding
+  // model off the compute node so it doesn't fight the chat model for RAM.
+  embeddingHost: z.string().default(""),
   // Wikipedia grounding: "online" hits the live MediaWiki API, "kiwix" hits a
   // local kiwix-serve (offline). Langs are comma-separated wiki codes.
   wikipediaProvider: z.string().default("online"),
@@ -28,6 +32,7 @@ const ENV_DEFAULTS: Record<keyof AppConfig, string | undefined> = {
   llamaCppBinPath: process.env.LLAMACPP_BIN_PATH,
   ollamaHost: process.env.OLLAMA_HOST,
   embeddingModel: process.env.EMBEDDING_MODEL,
+  embeddingHost: process.env.EMBEDDING_HOST,
   wikipediaProvider: process.env.WIKIPEDIA_PROVIDER,
   kiwixUrl: process.env.KIWIX_URL,
   wikipediaLangs: process.env.WIKIPEDIA_LANGS,
