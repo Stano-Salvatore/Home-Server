@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import { runMigrations } from "@/server/db/client";
-import { loadSettings, pathStatus } from "@/server/settings/config";
+import { loadSettings } from "@/server/settings/config";
 
 let bootstrapped = false;
 
@@ -20,10 +20,8 @@ export async function bootstrap() {
   const { loadVectorIndex } = await import("@/server/brain/vectorStore");
   loadVectorIndex();
 
-  if (pathStatus(config.vaultPath).exists) {
-    const { startVaultWatcher } = await import("@/server/obsidian/watcher");
-    startVaultWatcher(config.vaultPath);
-  }
+  const { startVaultWatchers } = await import("@/server/obsidian/watcher");
+  startVaultWatchers();
 
   const { startScheduler } = await import("@/server/tasks/scheduler");
   startScheduler();

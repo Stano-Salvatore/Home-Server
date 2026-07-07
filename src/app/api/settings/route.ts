@@ -20,8 +20,8 @@ export async function PUT(req: NextRequest) {
   const config = updateSettings(body);
 
   if (body.vaultPath !== undefined) {
-    const { restartVaultWatcher } = await import("@/server/obsidian/watcher");
-    await restartVaultWatcher(config.vaultPath);
+    const { restartVaultWatchers } = await import("@/server/obsidian/watcher");
+    await restartVaultWatchers();
   }
 
   return NextResponse.json({

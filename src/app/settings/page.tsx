@@ -20,7 +20,6 @@ type Config = {
 type Status = Record<"vaultPath" | "libraryPath" | "uploadsPath", { exists: boolean; writable: boolean }>;
 
 const FIELDS: { key: keyof Config; label: string; hint: string }[] = [
-  { key: "vaultPath", label: "Obsidian vault path", hint: "Folder containing your .md notes (optional)" },
   { key: "libraryPath", label: "Library folder", hint: "Folder with your .epub / .pdf files" },
   { key: "uploadsPath", label: "Uploads folder", hint: "Where uploaded files/photos are stored" },
   { key: "llamaCppBinPath", label: "llama.cpp binary path", hint: "e.g. llama-server or /usr/local/bin/llama-server" },
@@ -75,6 +74,8 @@ export default function SettingsPage() {
         feature instead of breaking the app.
       </p>
 
+      <VaultsCard />
+
       <Card className="p-5 flex flex-col gap-5">
         <div>
           <label className="text-sm font-medium text-ink mb-1 block">Wikipedia grounding</label>
@@ -124,5 +125,140 @@ export default function SettingsPage() {
         </div>
       </Card>
     </div>
+  );
+}
+
+type Vault = { id: string; name: string; path: string; status: { exists: boolean; writable: boolean } };
+
+function VaultsCard() {
+  const [vaults, setVaults] = useState<Vault[] | null>(null);
+  const [name, setName] = useState("");
+  const [path, setPath] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [rescan, setRescan] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetch("/api/vaults")
+      .then((r) => r.json())
+      .then((d) => setVaults(d.vaults));
+  }, []);
+
+  async function add() {
+    if (!path.trim()) return;
+    setBusy(true);
+    try {
+      const res = await fetch("/api/vaults", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name, path }),
+      });
+      const d = await res.json();
+      if (d.vaults) {
+        setVaults(d.vaults);
+        setName("");
+        setPath("");
+      }
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function remove(id: string) {
+    setBusy(true);
+    try {
+      const res = await fetch(`/api/vaults?id=${encodeURIComponent(id)}`, { method: "DELETE" });
+      const d = await res.json();
+      if (d.vaults) setVaults(d.vaults);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function rescanAll() {
+    setBusy(true);
+    setRescan("Rescanning…");
+    try {
+      const res = await fetch("/api/obsidian/rescan", { method: "POST" });
+      const d = await res.json();
+      if (d.error) {
+        setRescan(d.error);
+      } else {
+        const parts: string[] = [`Indexed ${d.indexed} of ${d.total} notes.`];
+        for (const v of d.vaults ?? []) {
+          if (v.errors?.length) parts.push(`${v.name}: ${v.errors[0]}`);
+        }
+        setRescan(parts.join(" "));
+      }
+    } catch (err) {
+      setRescan(err instanceof Error ? err.message : String(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Card className="p-5 flex flex-col gap-4 mb-6">
+      <div>
+        <h2 className="text-sm font-semibold text-ink">Obsidian vaults</h2>
+        <p className="text-xs text-ink-dim mt-1">
+          Add one or more vault folders — each is watched live and re-indexed into Brain. On
+          Android, shared storage often doesn&apos;t emit change events, so hit Rescan after editing
+          in Obsidian.
+        </p>
+      </div>
+
+      {vaults === null ? (
+        <p className="text-sm text-ink-dim">Loading…</p>
+      ) : vaults.length === 0 ? (
+        <p className="text-sm text-ink-dim">No vaults yet. Add one below.</p>
+      ) : (
+        <ul className="flex flex-col gap-2">
+          {vaults.map((v) => (
+            <li
+              key={v.id}
+              className="flex items-center justify-between gap-3 rounded-md bg-[var(--surface-2)] border border-[var(--border)] px-3 py-2"
+            >
+              <div className="min-w-0">
+                <div className="flex items-center gap-2">
+                  <span className="text-sm text-ink truncate">{v.name}</span>
+                  <Badge color={v.status.exists ? "green" : "yellow"}>
+                    {v.status.exists ? "found" : "not found"}
+                  </Badge>
+                </div>
+                <div className="text-xs text-ink-dim truncate">{v.path}</div>
+              </div>
+              <Button variant="secondary" onClick={() => remove(v.id)} disabled={busy}>
+                Remove
+              </Button>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      <div className="flex flex-col gap-2 sm:flex-row">
+        <input
+          className="rounded-md bg-[var(--surface-2)] border border-[var(--border)] px-3 py-1.5 text-sm text-ink focus:outline-none focus:border-accent sm:w-40"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          placeholder="Name (optional)"
+        />
+        <input
+          className="flex-1 rounded-md bg-[var(--surface-2)] border border-[var(--border)] px-3 py-1.5 text-sm text-ink focus:outline-none focus:border-accent"
+          value={path}
+          onChange={(e) => setPath(e.target.value)}
+          placeholder="/storage/emulated/0/Obsidian/MyVault"
+        />
+        <Button onClick={add} disabled={busy || !path.trim()}>
+          Add
+        </Button>
+      </div>
+
+      <div className="flex items-center gap-3">
+        <Button variant="secondary" onClick={rescanAll} disabled={busy || (vaults?.length ?? 0) === 0}>
+          Rescan all
+        </Button>
+        {rescan && <span className="text-xs text-ink-dim">{rescan}</span>}
+      </div>
+    </Card>
   );
 }

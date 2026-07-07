@@ -3,6 +3,14 @@ import path from "node:path";
 import matter from "gray-matter";
 import { loadSettings } from "@/server/settings/config";
 import { ingestDocument } from "@/server/brain/ingest";
+import { vaultPaths } from "./vaults";
+
+// New notes are written into the first configured vault (falling back to the
+// legacy single vaultPath setting) — the one the user thinks of as their main
+// notebook when they hit "Save to Obsidian".
+function primaryVaultPath(): string {
+  return vaultPaths()[0] || loadSettings().vaultPath;
+}
 
 const SELF_WRITE_TTL_MS = 2000;
 
@@ -46,7 +54,7 @@ export async function writeNote(opts: {
   content: string;
   frontmatter?: Record<string, unknown>;
 }): Promise<string> {
-  const { vaultPath } = loadSettings();
+  const vaultPath = primaryVaultPath();
   if (!vaultPath) throw new Error("No Obsidian vault configured");
 
   const safeName = sanitizeFilename(opts.filename);

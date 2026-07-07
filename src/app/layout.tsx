@@ -1,10 +1,26 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import { Sidebar } from "@/components/sidebar/sidebar";
 
 export const metadata: Metadata = {
   title: "Home Server",
   description: "Self-hosted local AI agent dashboard",
+  manifest: "/manifest.webmanifest",
+  appleWebApp: { capable: true, title: "Nedory", statusBarStyle: "black-translucent" },
+  icons: {
+    icon: [
+      { url: "/favicon-32.png", sizes: "32x32", type: "image/png" },
+      { url: "/favicon-16.png", sizes: "16x16", type: "image/png" },
+      { url: "/icon.svg", type: "image/svg+xml" },
+    ],
+    apple: [{ url: "/apple-touch-icon.png", sizes: "180x180" }],
+  },
+};
+
+export const viewport: Viewport = {
+  themeColor: "#0b0c0e",
+  width: "device-width",
+  initialScale: 1,
 };
 
 export default function RootLayout({
