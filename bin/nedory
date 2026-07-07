@@ -1,0 +1,32 @@
+#!/usr/bin/env bash
+# Nedory — one command to boot the Home Server dashboard (the S25 app).
+#   nedory          start the app (builds first if needed)
+#   nedory update   git pull + rebuild, then start
+#
+# Install once so you can run `nedory` from anywhere:
+#   chmod +x ~/Home-Server/bin/nedory
+#   ln -sf ~/Home-Server/bin/nedory "$PREFIX/bin/nedory"
+set -e
+
+# Resolve the repo root even when this is invoked via a symlink on PATH.
+SELF="$(readlink -f "$0" 2>/dev/null || echo "$0")"
+ROOT="$(cd "$(dirname "$SELF")/.." && pwd)"
+cd "$ROOT"
+
+# Best-effort: keep Termux awake so Android doesn't kill the server.
+command -v termux-wake-lock >/dev/null 2>&1 && termux-wake-lock || true
+
+if [ "$1" = "update" ]; then
+  echo "◢ Nedory: pulling the latest…"
+  git pull
+  npm install
+  npm run build
+fi
+
+if [ ! -d .next ]; then
+  echo "◢ Nedory: first build, one moment…"
+  npm run build
+fi
+
+echo "◢ Nedory online  →  http://localhost:3000"
+exec npm run start

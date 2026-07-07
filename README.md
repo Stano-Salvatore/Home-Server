@@ -34,6 +34,25 @@ npm run dev
 
 Open http://localhost:3000 — it redirects to `/chat`. Configure paths (Obsidian vault, library folder, uploads folder, llama.cpp binary, Ollama host) any time from `/settings`.
 
+## `nedory` — one-command startup
+
+Install the shortcut once (on the phone/box that runs the app):
+
+```bash
+chmod +x ~/Home-Server/bin/nedory
+ln -sf ~/Home-Server/bin/nedory "$PREFIX/bin/nedory"   # Termux; elsewhere use ~/.local/bin
+```
+
+Then, from anywhere:
+
+```bash
+nedory          # build if needed, then start the dashboard
+nedory update   # git pull + rebuild, then start
+```
+
+On a separate compute device (e.g. an S21 running Ollama + Kiwix), `bin/nedory-node`
+boots those services with one command — see the comments in that file.
+
 ## Building for production
 
 ```bash

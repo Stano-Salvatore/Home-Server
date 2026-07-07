@@ -1,0 +1,32 @@
+#!/usr/bin/env bash
+# Nedory (node) — boot the AI services on a compute phone like the S21:
+# Ollama (bound to the network) + Kiwix (offline Wikipedia) if any .zim exist.
+#
+# Install once on that device:
+#   printf '%s' "$(cat nedory-node)" > "$PREFIX/bin/nedory" && chmod +x "$PREFIX/bin/nedory"
+# then just run:  nedory
+
+# Keep Termux awake so Android doesn't kill the servers.
+command -v termux-wake-lock >/dev/null 2>&1 && termux-wake-lock || true
+
+# Ollama, reachable across the network (Tailscale / LAN), not just localhost.
+if ! pgrep -f "ollama serve" >/dev/null 2>&1; then
+  OLLAMA_HOST=0.0.0.0:11434 nohup ollama serve >"$HOME/ollama.log" 2>&1 &
+  echo "◢ ollama serving on 0.0.0.0:11434"
+else
+  echo "◢ ollama already running"
+fi
+
+# Kiwix, only if you've downloaded ZIM files into ~/zim.
+if ls "$HOME"/zim/*.zim >/dev/null 2>&1; then
+  if ! pgrep -f "kiwix-serve" >/dev/null 2>&1; then
+    nohup kiwix-serve --port 8080 "$HOME"/zim/*.zim >"$HOME/kiwix.log" 2>&1 &
+    echo "◢ kiwix serving on :8080"
+  else
+    echo "◢ kiwix already running"
+  fi
+else
+  echo "◢ no ~/zim/*.zim yet — skipping kiwix (offline Wikipedia)"
+fi
+
+echo "◢ Nedory: S21 AI services up."
