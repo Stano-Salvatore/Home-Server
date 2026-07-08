@@ -74,7 +74,7 @@ export function listMessages(conversationId: string) {
     .all();
 }
 
-function getMemoryContext(): string | null {
+export function getMemoryContext(): string | null {
   const facts = listMemoryFacts();
   if (facts.length === 0) return null;
   return facts.map((f) => `- ${f.content}`).join("\n");
@@ -119,7 +119,7 @@ async function getChatMemoryContext(
   }
 }
 
-async function getWikipediaContext(
+export async function getWikipediaContext(
   query: string,
 ): Promise<{ block: string; citations: Citation[] } | null> {
   try {

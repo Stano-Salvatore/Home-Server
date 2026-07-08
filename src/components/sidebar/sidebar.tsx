@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import {
   MessageSquare,
   Bot,
+  Users,
   BrainCircuit,
   ChefHat,
   Library,
@@ -19,6 +20,7 @@ const NAV_ITEMS = [
   { href: "/chat", label: "chat", icon: MessageSquare },
   { href: "/projects", label: "projects", icon: FolderKanban },
   { href: "/agents", label: "agents", icon: Bot },
+  { href: "/council", label: "council", icon: Users },
   { href: "/brain", label: "brain", icon: BrainCircuit },
   { href: "/cookbook", label: "cookbook", icon: ChefHat },
   { href: "/nodes", label: "nodes", icon: Server },
