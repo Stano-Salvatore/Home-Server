@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Nedory — one command to boot the Home Server dashboard (the S25 app).
-#   nedory          start the app (builds first if needed)
-#   nedory update   git pull + rebuild, then start
+#   nedory          (re)start the app (builds first if needed)
+#   nedory update   git pull + rebuild, then restart
+#   nedory stop     stop a running instance
 #
 # Install once so you can run `nedory` from anywhere:
 #   chmod +x ~/Home-Server/bin/nedory
@@ -12,6 +13,20 @@ set -e
 SELF="$(readlink -f "$0" 2>/dev/null || echo "$0")"
 ROOT="$(cd "$(dirname "$SELF")/.." && pwd)"
 cd "$ROOT"
+
+# Stop any instance already holding port 3000 (e.g. the Termux:Boot autostart,
+# or a run from earlier). Without this, a second `nedory` just collides with
+# EADDRINUSE and you keep looking at the OLD build. Re-running should always
+# hand you the latest.
+stop_running() {
+  pkill -f "next start" 2>/dev/null && sleep 1 || true
+}
+
+if [ "$1" = "stop" ]; then
+  stop_running
+  echo "◢ Nedory: stopped."
+  exit 0
+fi
 
 # Best-effort: keep Termux awake so Android doesn't kill the server.
 command -v termux-wake-lock >/dev/null 2>&1 && termux-wake-lock || true
@@ -27,6 +42,9 @@ if [ ! -d .next ]; then
   echo "◢ Nedory: first build, one moment…"
   npm run build
 fi
+
+# Free the port before we claim it, so this run replaces any old instance.
+stop_running
 
 echo "◢ Nedory online  →  http://localhost:3000"
 exec npm run start
