@@ -32,7 +32,7 @@ export default function RootLayout({
     <html lang="en" className="h-full antialiased">
       <body className="min-h-full h-full flex text-ink" style={{ background: "var(--bg)" }}>
         <Sidebar />
-        <main className="flex-1 min-w-0 h-screen overflow-y-auto">{children}</main>
+        <main className="flex-1 min-w-0 h-screen overflow-y-auto pt-12 md:pt-0">{children}</main>
       </body>
     </html>
   );
