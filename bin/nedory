@@ -4,6 +4,7 @@
 #   nedory          (re)start everything: S21 brain (if configured) + local
 #                   Ollama (if installed) + the dashboard
 #   nedory update   git pull + rebuild, then restart everything
+#   nedory status   check every service in the cluster
 #   nedory stop     stop the local dashboard
 #
 # To also wake the S21 compute node automatically, copy .nedory.env.example to
@@ -14,6 +15,9 @@ set -e
 SELF="$(readlink -f "$0" 2>/dev/null || echo "$0")"
 ROOT="$(cd "$(dirname "$SELF")/.." && pwd)"
 cd "$ROOT"
+
+# Optional per-device config (S21_SSH, S21_OLLAMA, S21_KIWIX, etc.).
+[ -f "$ROOT/.nedory.env" ] && . "$ROOT/.nedory.env"
 
 # Stop whatever is serving on :3000. Next spawns a child `next-server` that
 # actually holds the socket, so killing only `next start` leaves the port taken
@@ -31,11 +35,24 @@ if [ "$1" = "stop" ]; then
   exit 0
 fi
 
+if [ "$1" = "status" ]; then
+  check() { # label url
+    if curl -sf -m 4 "$2" >/dev/null 2>&1; then
+      printf '  \033[32m✓\033[0m %s\n' "$1"
+    else
+      printf '  \033[31m✗\033[0m %s  \033[2m%s\033[0m\n' "$1" "$2"
+    fi
+  }
+  echo "◢ Nedory cluster status"
+  check "dashboard (this phone)" "http://localhost:3000"
+  check "S21 · Ollama"          "${S21_OLLAMA:-http://100.126.149.29:11434}/api/tags"
+  check "S21 · Kiwix"           "${S21_KIWIX:-http://100.126.149.29:8080}"
+  command -v ollama >/dev/null 2>&1 && check "local Ollama (embeddings)" "http://localhost:11434/api/tags"
+  exit 0
+fi
+
 # Best-effort: keep Termux awake so Android doesn't kill anything we start.
 command -v termux-wake-lock >/dev/null 2>&1 && termux-wake-lock || true
-
-# Optional per-device config (S21_SSH, etc.).
-[ -f "$ROOT/.nedory.env" ] && . "$ROOT/.nedory.env"
 
 if [ "$1" = "update" ]; then
   echo "◢ Nedory: pulling the latest…"
