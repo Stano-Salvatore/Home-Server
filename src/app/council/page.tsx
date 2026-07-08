@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { ModelPicker } from "@/components/chat/model-picker";
 import { Send, Square, Sparkles, Plus, X } from "lucide-react";
 import type { ModelOption } from "@/lib/types";
+import { resolveAgentOption } from "@/lib/agentModel";
 
 type Agent = { id: string; name: string; emoji: string; modelTag: string; systemPrompt?: string; wikiDefault?: boolean; color?: string };
 
@@ -77,7 +78,7 @@ export default function CouncilPage() {
       // Seed the council with every agent whose model is actually available.
       const seeded: Participant[] = [];
       for (const a of agents) {
-        const opt = opts.find((o) => o.backend === "ollama" && o.label === a.modelTag);
+        const opt = resolveAgentOption(a.modelTag, opts);
         if (!opt) continue;
         seeded.push({
           key: `agent:${a.id}`,

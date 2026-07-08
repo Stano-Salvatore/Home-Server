@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Plus, Pencil, Trash2 } from "lucide-react";
 import type { ModelOption } from "@/lib/types";
+import { resolveAgentOption } from "@/lib/agentModel";
 
 type Agent = {
   id: string;
@@ -90,7 +91,7 @@ export function GraphTab() {
 
   const launchAgent = useCallback(
     async (agent: Agent) => {
-      const opt = optionsRef.current.find((o) => o.backend === "ollama" && o.label === agent.modelTag);
+      const opt = resolveAgentOption(agent.modelTag, optionsRef.current);
       if (!opt) return;
       const res = await fetch("/api/chat/conversations", {
         method: "POST",

@@ -6,6 +6,7 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Plus, Trash2, Pencil } from "lucide-react";
 import type { ModelOption } from "@/lib/types";
+import { resolveAgentOption, agentModelOnline } from "@/lib/agentModel";
 
 type Agent = {
   id: string;
@@ -50,7 +51,7 @@ export default function AgentsPage() {
 
   async function launch(agent: Agent) {
     setLaunchError(null);
-    const opt = options.find((o) => o.backend === "ollama" && o.label === agent.modelTag);
+    const opt = resolveAgentOption(agent.modelTag, options);
     if (!opt) {
       setLaunchError(
         `${agent.name}'s model (${agent.modelTag}) isn't on any online node right now. Check the Nodes tab.`,
@@ -119,7 +120,7 @@ export default function AgentsPage() {
       ) : (
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
           {agents.map((agent) => {
-            const online = options.some((o) => o.backend === "ollama" && o.label === agent.modelTag);
+            const online = agentModelOnline(agent.modelTag, options);
             return (
               <Card key={agent.id} className="p-4 group relative">
                 <button className="w-full text-left" onClick={() => launch(agent)}>
