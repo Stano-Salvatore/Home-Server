@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Server, Cpu, Trash2, Plus, RotateCw } from "lucide-react";
+import { Server, Cpu, Trash2, Plus, RotateCw, BookOpen, Database } from "lucide-react";
 
 type NodeStatus = {
   id: string;
@@ -16,10 +16,12 @@ type NodeStatus = {
 };
 
 type LlamaServer = { id: string; name: string; port: number; status: string };
+type ServiceStatus = { name: string; kind: string; url: string; online: boolean };
 
 export default function NodesPage() {
   const [nodes, setNodes] = useState<NodeStatus[]>([]);
   const [llamacpp, setLlamacpp] = useState<LlamaServer[]>([]);
+  const [services, setServices] = useState<ServiceStatus[]>([]);
   const [loading, setLoading] = useState(true);
   const [adding, setAdding] = useState(false);
   const [newName, setNewName] = useState("");
@@ -30,11 +32,15 @@ export default function NodesPage() {
     [],
   );
 
-  const apply = useCallback((data: { nodes?: NodeStatus[]; llamacppServers?: LlamaServer[] }) => {
-    setNodes(data.nodes ?? []);
-    setLlamacpp((data.llamacppServers ?? []).filter((s) => s.status === "running"));
-    setLoading(false);
-  }, []);
+  const apply = useCallback(
+    (data: { nodes?: NodeStatus[]; llamacppServers?: LlamaServer[]; services?: ServiceStatus[] }) => {
+      setNodes(data.nodes ?? []);
+      setLlamacpp((data.llamacppServers ?? []).filter((s) => s.status === "running"));
+      setServices(data.services ?? []);
+      setLoading(false);
+    },
+    [],
+  );
 
   const load = useCallback(() => {
     fetchNodes().then(apply);
@@ -179,6 +185,37 @@ export default function NodesPage() {
               )}
             </Card>
           ))}
+
+          {services.length > 0 && (
+            <div>
+              <div className="text-xs uppercase tracking-wide text-ink-dim mb-2 mt-2">
+                Services · non-inference boxes
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {services.map((svc) => (
+                  <Card key={svc.url} className="p-4">
+                    <div className="flex items-start gap-2.5">
+                      {svc.kind === "vector store" ? (
+                        <Database size={18} className={svc.online ? "text-accent" : "text-ink-dim"} />
+                      ) : (
+                        <BookOpen size={18} className={svc.online ? "text-accent" : "text-ink-dim"} />
+                      )}
+                      <div className="min-w-0">
+                        <div className="text-ink font-semibold flex items-center gap-2">
+                          {svc.name}
+                          <Badge color={svc.online ? "green" : "red"}>
+                            {svc.online ? "online" : "offline"}
+                          </Badge>
+                        </div>
+                        <div className="text-xs text-ink-dim mt-0.5">{svc.kind}</div>
+                        <div className="text-xs text-ink-dim mt-0.5 truncate">{svc.url}</div>
+                      </div>
+                    </div>
+                  </Card>
+                ))}
+              </div>
+            </div>
+          )}
 
           {llamacpp.length > 0 && (
             <Card className="p-5">

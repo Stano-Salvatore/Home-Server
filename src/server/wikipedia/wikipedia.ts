@@ -88,17 +88,45 @@ async function kiwixSearchBook(kiwixUrl: string, book: string, query: string, la
   }
 }
 
-async function kiwixSearch(query: string, kiwixUrl: string, langs: string[]): Promise<WikiHit[]> {
-  const books = await kiwixBooks(kiwixUrl);
+function kiwixUrls(): string[] {
+  return loadSettings()
+    .kiwixUrl.split(",")
+    .map((s) => s.trim().replace(/\/$/, ""))
+    .filter(Boolean);
+}
+
+/**
+ * Search across one or more Kiwix hosts, trying each in order for every
+ * language. This lets a small local ZIM (e.g. on the S25) answer common topics
+ * fast, and a big offline ZIM on another box (e.g. the Doogee) catch the rest.
+ */
+async function kiwixSearch(query: string, urls: string[], langs: string[]): Promise<WikiHit[]> {
+  const booksCache = new Map<string, string[]>();
+  const booksOf = async (url: string) => {
+    if (!booksCache.has(url)) booksCache.set(url, await kiwixBooks(url));
+    return booksCache.get(url)!;
+  };
+
   const hits: WikiHit[] = [];
   for (const lang of langs) {
-    // Match a served book to the language, e.g. "wikipedia_en_all_nopic_2024".
-    const book = books.find((b) => new RegExp(`[_.-]${lang}[_.-]`).test(b)) ?? books[0];
-    if (!book) continue;
-    const hit = await kiwixSearchBook(kiwixUrl, book, query, lang);
-    if (hit) hits.push(hit);
+    for (const url of urls) {
+      const books = await booksOf(url);
+      // Match a served book to the language, e.g. "wikipedia_en_all_nopic_2024".
+      const book = books.find((b) => new RegExp(`[_.-]${lang}[_.-]`).test(b)) ?? books[0];
+      if (!book) continue;
+      const hit = await kiwixSearchBook(url, book, query, lang);
+      if (hit) {
+        hits.push(hit);
+        break; // got this language from a host — don't hit the fallback host too
+      }
+    }
   }
   return hits;
+}
+
+async function onlineSearch(query: string, langs: string[]): Promise<WikiHit[]> {
+  const results = await Promise.all(langs.map((l) => onlineSearchLang(query, l)));
+  return results.filter((h): h is WikiHit => h !== null);
 }
 
 /** Retrieve grounding context from Wikipedia for a query. Never throws. */
@@ -106,14 +134,16 @@ export async function wikipediaSearch(query: string): Promise<WikiHit[]> {
   const settings = loadSettings();
   const langs = langsList();
   try {
-    if (settings.wikipediaProvider === "kiwix" && settings.kiwixUrl) {
-      const hits = await kiwixSearch(query, settings.kiwixUrl, langs);
-      if (hits.length > 0) return hits;
-      // Fall through to online only if no offline hit and it's reachable.
-      return [];
+    if (settings.wikipediaProvider === "kiwix") {
+      const urls = kiwixUrls();
+      if (urls.length) {
+        const hits = await kiwixSearch(query, urls, langs);
+        if (hits.length > 0) return hits;
+      }
+      // No offline hit — fall back to the live API if we happen to be online.
+      return await onlineSearch(query, langs);
     }
-    const results = await Promise.all(langs.map((l) => onlineSearchLang(query, l)));
-    return results.filter((h): h is WikiHit => h !== null);
+    return await onlineSearch(query, langs);
   } catch {
     return [];
   }
