@@ -18,7 +18,7 @@ export async function bootstrap() {
   await recoverRunningServers();
 
   const { loadVectorIndex } = await import("@/server/brain/vectorStore");
-  loadVectorIndex();
+  await loadVectorIndex();
 
   const { startVaultWatchers } = await import("@/server/obsidian/watcher");
   startVaultWatchers();

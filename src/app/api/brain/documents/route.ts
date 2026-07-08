@@ -27,6 +27,6 @@ export async function POST(req: NextRequest) {
 export async function DELETE(req: NextRequest) {
   const { id } = await req.json();
   if (!id) return NextResponse.json({ error: "id is required" }, { status: 400 });
-  deleteDocument(id);
+  await deleteDocument(id);
   return NextResponse.json({ ok: true });
 }

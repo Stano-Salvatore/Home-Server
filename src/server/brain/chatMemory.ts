@@ -4,7 +4,7 @@ import { brainChunks, brainDocuments } from "@/server/db/schema";
 import { getSetting } from "@/server/settings/config";
 import { ingestDocument, deleteDocument } from "./ingest";
 import type { SearchHit } from "./search";
-import type { ChunkMeta } from "./vectorStore";
+import type { MetaFilter } from "./vectorTypes";
 
 // Rolling budget for chat-derived memory. Default 5 GB; overridable via a
 // `chat_memory_cap_bytes` setting. When exceeded, the oldest turns are dropped.
@@ -50,7 +50,7 @@ function docBytes(documentId: string): number {
 }
 
 /** Drop the oldest chat-memory turns until we're back under the cap. */
-export function evictOldChatMemory() {
+export async function evictOldChatMemory() {
   const cap = chatMemoryCapBytes();
   let total = chatMemoryBytes();
   if (total <= cap) return;
@@ -65,7 +65,7 @@ export function evictOldChatMemory() {
   for (const doc of oldest) {
     if (total <= cap) break;
     total -= docBytes(doc.id);
-    deleteDocument(doc.id);
+    await deleteDocument(doc.id);
   }
 }
 
@@ -89,7 +89,7 @@ export async function rememberChatTurn(opts: {
       projectId: opts.projectId,
       content: `User: ${opts.userContent}\nAssistant: ${opts.assistantContent}`,
     });
-    evictOldChatMemory();
+    await evictOldChatMemory();
   } catch (err) {
     console.error("[chat-memory] failed to remember turn:", err);
   }
@@ -108,10 +108,11 @@ export async function recallChatMemory(
 ): Promise<SearchHit[]> {
   try {
     const { searchBrain } = await import("./search");
-    const filter = (meta: ChunkMeta) =>
-      meta.sourceType === "chat" &&
-      meta.projectId === conversation.projectId &&
-      meta.conversationId !== conversation.id;
+    const filter: MetaFilter = {
+      sourceTypeEq: "chat",
+      projectIdIn: [conversation.projectId],
+      conversationIdNe: conversation.id,
+    };
     // A modest floor keeps unrelated chatter out of the prompt.
     return await searchBrain(query, topK, { filter, minScore: 0.55 });
   } catch {
@@ -120,11 +121,11 @@ export async function recallChatMemory(
 }
 
 /** Filter for opt-in RAG: knowledge docs only (never chat memory), project-aware. */
-export function knowledgeFilter(projectId: string | null) {
-  return (meta: ChunkMeta) => {
-    if (meta.sourceType === "chat") return false;
-    // Global knowledge (projectId null) is always available; project docs only
-    // inside their own project.
-    return meta.projectId === null || meta.projectId === projectId;
+export function knowledgeFilter(projectId: string | null): MetaFilter {
+  // Global knowledge (projectId null) is always available; project docs only
+  // inside their own project.
+  return {
+    sourceTypeNe: "chat",
+    projectIdIn: projectId ? [null, projectId] : [null],
   };
 }

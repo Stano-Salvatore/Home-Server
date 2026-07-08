@@ -42,10 +42,10 @@ async function handleUpsert(absolutePath: string) {
   }
 }
 
-function handleUnlink(absolutePath: string) {
+async function handleUnlink(absolutePath: string) {
   const doc = getDocumentBySourcePath(absolutePath);
   if (doc) {
-    deleteDocument(doc.id);
+    await deleteDocument(doc.id);
     console.log(`[obsidian] removed ${path.basename(absolutePath)} from Brain`);
   }
 }

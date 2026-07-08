@@ -43,7 +43,7 @@ export async function ingestDocument(opts: {
 
   if (existing) {
     db.delete(brainChunks).where(eq(brainChunks.documentId, documentId)).run();
-    removeDocumentFromIndex(documentId);
+    await removeDocumentFromIndex(documentId);
   }
 
   const chunks = chunkText(opts.content);
@@ -81,7 +81,7 @@ export async function ingestDocument(opts: {
     db.insert(brainChunks).values(row).run();
   }
 
-  addToIndex(
+  await addToIndex(
     chunkRows.map((row, i) => ({ id: row.id, documentId, embedding: embeddings[i] })),
     {
       projectId: opts.projectId ?? null,
@@ -93,7 +93,7 @@ export async function ingestDocument(opts: {
   return { document: getDocument(documentId)!, unchanged: false };
 }
 
-export function deleteDocument(id: string) {
-  removeDocumentFromIndex(id);
+export async function deleteDocument(id: string) {
+  await removeDocumentFromIndex(id);
   db.delete(brainDocuments).where(eq(brainDocuments.id, id)).run();
 }

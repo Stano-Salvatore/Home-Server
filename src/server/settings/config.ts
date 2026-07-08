@@ -16,6 +16,11 @@ const AppConfigSchema = z.object({
   // Ollama (e.g. the dashboard phone's own localhost) to keep the embedding
   // model off the compute node so it doesn't fight the chat model for RAM.
   embeddingHost: z.string().default(""),
+  // Optional Qdrant vector DB. Blank = keep the vector index in this process's
+  // RAM (fine for notes; won't scale to gigabytes on a phone). Set to a Qdrant
+  // URL (e.g. the Lenovo services box) to hold vectors off-device instead.
+  qdrantUrl: z.string().default(""),
+  qdrantCollection: z.string().default("home_server"),
   // Wikipedia grounding: "online" hits the live MediaWiki API, "kiwix" hits a
   // local kiwix-serve (offline). Langs are comma-separated wiki codes.
   wikipediaProvider: z.string().default("online"),
@@ -33,6 +38,8 @@ const ENV_DEFAULTS: Record<keyof AppConfig, string | undefined> = {
   ollamaHost: process.env.OLLAMA_HOST,
   embeddingModel: process.env.EMBEDDING_MODEL,
   embeddingHost: process.env.EMBEDDING_HOST,
+  qdrantUrl: process.env.QDRANT_URL,
+  qdrantCollection: process.env.QDRANT_COLLECTION,
   wikipediaProvider: process.env.WIKIPEDIA_PROVIDER,
   kiwixUrl: process.env.KIWIX_URL,
   wikipediaLangs: process.env.WIKIPEDIA_LANGS,
