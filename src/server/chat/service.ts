@@ -45,7 +45,14 @@ export function createConversation(opts: {
 
 export function updateConversation(
   id: string,
-  patch: Partial<{ title: string; ragEnabled: boolean; wikiEnabled: boolean; backend: string; modelId: string }>,
+  patch: Partial<{
+    title: string;
+    ragEnabled: boolean;
+    wikiEnabled: boolean;
+    backend: string;
+    modelId: string;
+    projectId: string | null;
+  }>,
 ) {
   db.update(conversations)
     .set({ ...patch, updatedAt: Date.now() / 1000 })
@@ -134,18 +141,20 @@ async function getWikipediaContext(
   }
 }
 
-export async function* sendMessage(
-  conversationId: string,
+type Conversation = NonNullable<ReturnType<typeof getConversation>>;
+
+/**
+ * Builds context (memory + recall + RAG + Wikipedia), streams the assistant
+ * reply, and persists it. Shared by first-time sends and regeneration — the
+ * only difference is whether the user message was just inserted or already
+ * present in history.
+ */
+async function* streamAssistant(
+  conversation: Conversation,
   userContent: string,
   signal?: AbortSignal,
 ): AsyncGenerator<{ delta?: string; citations?: Citation[] }> {
-  const conversation = getConversation(conversationId);
-  if (!conversation) throw new Error("Conversation not found");
-
-  db.insert(messages)
-    .values({ id: newId("msg"), conversationId, role: "user", content: userContent })
-    .run();
-
+  const conversationId = conversation.id;
   const history = listMessages(conversationId).slice(-HISTORY_LIMIT);
   const chatMessages: ChatMessage[] = [];
   if (conversation.systemPrompt) {
@@ -239,4 +248,47 @@ export async function* sendMessage(
   }
 
   if (citations) yield { citations };
+}
+
+export async function* sendMessage(
+  conversationId: string,
+  userContent: string,
+  signal?: AbortSignal,
+): AsyncGenerator<{ delta?: string; citations?: Citation[] }> {
+  const conversation = getConversation(conversationId);
+  if (!conversation) throw new Error("Conversation not found");
+
+  db.insert(messages)
+    .values({ id: newId("msg"), conversationId, role: "user", content: userContent })
+    .run();
+
+  yield* streamAssistant(conversation, userContent, signal);
+}
+
+/**
+ * Re-answer the last user message: drop everything after it (the previous
+ * assistant reply) and stream a fresh one. No new user message is inserted.
+ */
+export async function* regenerateLast(
+  conversationId: string,
+  signal?: AbortSignal,
+): AsyncGenerator<{ delta?: string; citations?: Citation[] }> {
+  const conversation = getConversation(conversationId);
+  if (!conversation) throw new Error("Conversation not found");
+
+  const msgs = listMessages(conversationId);
+  let lastUserIdx = -1;
+  for (let i = msgs.length - 1; i >= 0; i--) {
+    if (msgs[i].role === "user") {
+      lastUserIdx = i;
+      break;
+    }
+  }
+  if (lastUserIdx < 0) throw new Error("Nothing to regenerate");
+
+  for (const m of msgs.slice(lastUserIdx + 1)) {
+    db.delete(messages).where(eq(messages.id, m.id)).run();
+  }
+
+  yield* streamAssistant(conversation, msgs[lastUserIdx].content, signal);
 }

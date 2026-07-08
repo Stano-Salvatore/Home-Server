@@ -3,29 +3,36 @@
 import { useEffect, useRef, useState, use as usePromise } from "react";
 import { useChatStream } from "@/lib/useChatStream";
 import { MessageBubble } from "@/components/chat/message-bubble";
+import { ModelPicker } from "@/components/chat/model-picker";
 import { Button } from "@/components/ui/button";
-import { Send, Square } from "lucide-react";
+import { Send, Square, RefreshCw } from "lucide-react";
 
 type Conversation = {
   id: string;
   title: string;
   backend: string;
   modelId: string;
+  projectId: string | null;
   ragEnabled: boolean;
   wikiEnabled: boolean;
 };
+type Project = { id: string; name: string; emoji: string | null };
 
 export default function ConversationPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = usePromise(params);
   const [conversation, setConversation] = useState<Conversation | null>(null);
+  const [projects, setProjects] = useState<Project[]>([]);
   const [input, setInput] = useState("");
-  const { messages, streaming, error, send, stop, loadHistory } = useChatStream(id);
+  const { messages, streaming, error, send, regenerate, stop, loadHistory } = useChatStream(id);
   const bottomRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     fetch(`/api/chat/conversations/${id}`)
       .then((r) => r.json())
       .then((data) => setConversation(data.conversation));
+    fetch("/api/projects")
+      .then((r) => r.json())
+      .then((d) => setProjects(d.projects ?? []));
     loadHistory(id);
   }, [id, loadHistory]);
 
@@ -33,12 +40,12 @@ export default function ConversationPage({ params }: { params: Promise<{ id: str
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  async function toggle(patch: Partial<Conversation>) {
+  async function patch(body: Partial<Conversation>) {
     if (!conversation) return;
     const res = await fetch(`/api/chat/conversations/${id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(patch),
+      body: JSON.stringify(body),
     });
     const data = await res.json();
     setConversation(data.conversation);
@@ -51,16 +58,36 @@ export default function ConversationPage({ params }: { params: Promise<{ id: str
     void send(content);
   }
 
+  const canRegenerate =
+    !streaming && messages.length > 0 && messages[messages.length - 1].role === "assistant";
+
   return (
     <div className="flex flex-col h-full">
-      <div className="flex items-center justify-between border-b px-5 py-3" style={{ borderColor: "var(--border)" }}>
-        <div className="text-sm text-ink-dim truncate">
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b px-5 py-3" style={{ borderColor: "var(--border)" }}>
+        <div className="flex items-center gap-2 min-w-0">
           {conversation ? (
             <>
-              <span className="text-accent">[{conversation.backend}]</span> {conversation.modelId}
+              <ModelPicker
+                value={{ backend: conversation.backend as "ollama" | "llamacpp", modelId: conversation.modelId }}
+                onChange={(v) => patch({ backend: v.backend, modelId: v.modelId })}
+              />
+              <select
+                className="rounded-md bg-[var(--surface-2)] border border-[var(--border)] px-2 py-1 text-xs text-ink-dim focus:outline-none focus:border-accent"
+                value={conversation.projectId ?? ""}
+                onChange={(e) => patch({ projectId: e.target.value || null })}
+                title="Project"
+              >
+                <option value="">No project</option>
+                {projects.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.emoji ? `${p.emoji} ` : ""}
+                    {p.name}
+                  </option>
+                ))}
+              </select>
             </>
           ) : (
-            "Loading…"
+            <span className="text-sm text-ink-dim">Loading…</span>
           )}
         </div>
         {conversation && (
@@ -69,7 +96,7 @@ export default function ConversationPage({ params }: { params: Promise<{ id: str
               <input
                 type="checkbox"
                 checked={conversation.ragEnabled}
-                onChange={() => toggle({ ragEnabled: !conversation.ragEnabled })}
+                onChange={() => patch({ ragEnabled: !conversation.ragEnabled })}
               />
               Brain
             </label>
@@ -77,7 +104,7 @@ export default function ConversationPage({ params }: { params: Promise<{ id: str
               <input
                 type="checkbox"
                 checked={conversation.wikiEnabled}
-                onChange={() => toggle({ wikiEnabled: !conversation.wikiEnabled })}
+                onChange={() => patch({ wikiEnabled: !conversation.wikiEnabled })}
               />
               Wikipedia
             </label>
@@ -92,6 +119,15 @@ export default function ConversationPage({ params }: { params: Promise<{ id: str
         {messages.map((m) => (
           <MessageBubble key={m.id} message={m} />
         ))}
+        {canRegenerate && (
+          <button
+            onClick={() => void regenerate()}
+            className="self-start flex items-center gap-1.5 text-xs text-ink-dim hover:text-ink rounded-md border px-2 py-1"
+            style={{ borderColor: "var(--border)" }}
+          >
+            <RefreshCw size={12} /> Regenerate
+          </button>
+        )}
         <div ref={bottomRef} />
       </div>
 
