@@ -43,3 +43,6 @@ next-env.d.ts
 
 # app runtime data
 /data
+
+# Local per-device Nedory config (may contain host/user)
+.nedory.env

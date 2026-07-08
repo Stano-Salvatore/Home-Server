@@ -1,12 +1,13 @@
 #!/usr/bin/env bash
-# Nedory — one command to boot the Home Server dashboard (the S25 app).
-#   nedory          (re)start the app (builds first if needed)
-#   nedory update   git pull + rebuild, then restart
-#   nedory stop     stop a running instance
+# Nedory — one command to bring the whole workspace up from the S25.
 #
-# Install once so you can run `nedory` from anywhere:
-#   chmod +x ~/Home-Server/bin/nedory
-#   ln -sf ~/Home-Server/bin/nedory "$PREFIX/bin/nedory"
+#   nedory          (re)start everything: S21 brain (if configured) + local
+#                   Ollama (if installed) + the dashboard
+#   nedory update   git pull + rebuild, then restart everything
+#   nedory stop     stop the local dashboard
+#
+# To also wake the S21 compute node automatically, copy .nedory.env.example to
+# .nedory.env and set S21_SSH (needs an sshd running on the S21 — see that file).
 set -e
 
 # Resolve the repo root even when this is invoked via a symlink on PATH.
@@ -14,22 +15,27 @@ SELF="$(readlink -f "$0" 2>/dev/null || echo "$0")"
 ROOT="$(cd "$(dirname "$SELF")/.." && pwd)"
 cd "$ROOT"
 
-# Stop any instance already holding port 3000 (e.g. the Termux:Boot autostart,
-# or a run from earlier). Without this, a second `nedory` just collides with
-# EADDRINUSE and you keep looking at the OLD build. Re-running should always
-# hand you the latest.
+# Stop whatever is serving on :3000. Next spawns a child `next-server` that
+# actually holds the socket, so killing only `next start` leaves the port taken
+# (hello, EADDRINUSE). Kill both, and fall back to freeing the port directly.
 stop_running() {
-  pkill -f "next start" 2>/dev/null && sleep 1 || true
+  pkill -f "next start"  2>/dev/null || true
+  pkill -f "next-server" 2>/dev/null || true
+  command -v fuser >/dev/null 2>&1 && fuser -k 3000/tcp 2>/dev/null || true
+  sleep 1
 }
 
 if [ "$1" = "stop" ]; then
   stop_running
-  echo "◢ Nedory: stopped."
+  echo "◢ Nedory: dashboard stopped."
   exit 0
 fi
 
-# Best-effort: keep Termux awake so Android doesn't kill the server.
+# Best-effort: keep Termux awake so Android doesn't kill anything we start.
 command -v termux-wake-lock >/dev/null 2>&1 && termux-wake-lock || true
+
+# Optional per-device config (S21_SSH, etc.).
+[ -f "$ROOT/.nedory.env" ] && . "$ROOT/.nedory.env"
 
 if [ "$1" = "update" ]; then
   echo "◢ Nedory: pulling the latest…"
@@ -38,13 +44,28 @@ if [ "$1" = "update" ]; then
   npm run build
 fi
 
+# 1) Wake the S21 compute node (Ollama + Kiwix) over Tailscale, if configured.
+if [ -n "${S21_SSH:-}" ]; then
+  echo "◢ Waking the S21 brain…"
+  if $S21_SSH 'bash -lc "~/Home-Server/bin/nedory-node"' </dev/null >/dev/null 2>&1; then
+    echo "  ✓ S21 up (Ollama + Kiwix)"
+  else
+    echo "  ⚠ couldn't reach the S21 — is sshd running there? (check S21_SSH in .nedory.env)"
+  fi
+fi
+
+# 2) Local Ollama on this phone, if installed (e.g. for on-device embeddings).
+if command -v ollama >/dev/null 2>&1 && ! pgrep -f "ollama serve" >/dev/null 2>&1; then
+  OLLAMA_HOST=0.0.0.0:11434 OLLAMA_KEEP_ALIVE=30m nohup ollama serve >"$HOME/ollama.log" 2>&1 &
+  echo "◢ Local Ollama serving on :11434"
+fi
+
+# 3) The dashboard.
 if [ ! -d .next ]; then
   echo "◢ Nedory: first build, one moment…"
   npm run build
 fi
 
-# Free the port before we claim it, so this run replaces any old instance.
-stop_running
-
+stop_running   # free the port so this run replaces any old instance
 echo "◢ Nedory online  →  http://localhost:3000"
 exec npm run start
