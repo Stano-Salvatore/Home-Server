@@ -155,15 +155,17 @@ export function ConversationList() {
                   setEditing(c.id);
                   setEditTitle(c.title);
                 }}
-                className="opacity-0 group-hover:opacity-100 text-ink-dim hover:text-ink p-1"
+                className="opacity-0 group-hover:opacity-100 focus-visible:opacity-100 text-ink-dim hover:text-ink p-1"
                 title="Rename"
+                aria-label={`Rename ${c.title}`}
               >
                 <Pencil size={13} />
               </button>
               <button
                 onClick={() => remove(c.id)}
-                className="opacity-0 group-hover:opacity-100 text-ink-dim hover:text-accent p-1"
+                className="opacity-0 group-hover:opacity-100 focus-visible:opacity-100 text-ink-dim hover:text-accent p-1"
                 title="Delete"
+                aria-label={`Delete ${c.title}`}
               >
                 <Trash2 size={13} />
               </button>

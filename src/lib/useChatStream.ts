@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useRef, useState } from "react";
+import { friendlyError } from "@/lib/friendlyError";
 
 export type ChatUIMessage = {
   id: string;
@@ -60,7 +61,7 @@ export function useChatStream(conversationId: string | null) {
           if (!line) continue;
           const data = JSON.parse(line);
           if (data.error) {
-            setError(data.error);
+            setError(friendlyError(data.error));
           } else if (data.delta) {
             setMessages((prev) => {
               const next = [...prev];
@@ -81,7 +82,7 @@ export function useChatStream(conversationId: string | null) {
       }
     } catch (err) {
       if (err instanceof Error && err.name !== "AbortError") {
-        setError(err.message);
+        setError(friendlyError(err.message));
       }
     } finally {
       setStreaming(false);

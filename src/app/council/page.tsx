@@ -6,6 +6,7 @@ import { ModelPicker } from "@/components/chat/model-picker";
 import { Send, Square, Sparkles, Plus, X } from "lucide-react";
 import type { ModelOption } from "@/lib/types";
 import { resolveAgentOption } from "@/lib/agentModel";
+import { friendlyError } from "@/lib/friendlyError";
 
 type Agent = { id: string; name: string; emoji: string; modelTag: string; systemPrompt?: string; wikiDefault?: boolean; color?: string };
 
@@ -133,11 +134,11 @@ export default function CouncilPage() {
             { backend: p.backend, modelId: p.modelId, prompt: q, systemPrompt: p.systemPrompt, wikiEnabled: wiki && (p.wikiDefault ?? true) },
             ctrl.signal,
             (d) => setAnswers((prev) => ({ ...prev, [p.key]: { ...prev[p.key], content: (prev[p.key]?.content ?? "") + d } })),
-            (e) => setAnswers((prev) => ({ ...prev, [p.key]: { ...prev[p.key], error: e } })),
+            (e) => setAnswers((prev) => ({ ...prev, [p.key]: { ...prev[p.key], error: friendlyError(e) } })),
           );
         } catch (err) {
           if (err instanceof Error && err.name !== "AbortError") {
-            setAnswers((prev) => ({ ...prev, [p.key]: { ...prev[p.key], error: err.message } }));
+            setAnswers((prev) => ({ ...prev, [p.key]: { ...prev[p.key], error: friendlyError(err.message) } }));
           }
         } finally {
           setAnswers((prev) => ({ ...prev, [p.key]: { ...prev[p.key], running: false } }));
@@ -166,7 +167,7 @@ export default function CouncilPage() {
         { backend: judge.backend, modelId: judge.modelId, prompt: judgePrompt, systemPrompt: "You are the council's chair — a sharp, fair judge who synthesizes multiple answers into the best one.", wikiEnabled: false },
         ctrl.signal,
         (d) => setSynthesis((prev) => ({ content: (prev?.content ?? "") + d, running: true })),
-        (e) => setSynthesis((prev) => ({ content: prev?.content ?? "", running: true, error: e })),
+        (e) => setSynthesis((prev) => ({ content: prev?.content ?? "", running: true, error: friendlyError(e) })),
       );
     } finally {
       setSynthesis((prev) => (prev ? { ...prev, running: false } : null));
