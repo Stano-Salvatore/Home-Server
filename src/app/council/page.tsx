@@ -61,12 +61,16 @@ export default function CouncilPage() {
   const [participants, setParticipants] = useState<Participant[]>([]);
   const [prompt, setPrompt] = useState("");
   const [wiki, setWiki] = useState(true);
+  const [brain, setBrain] = useState(false);
+  // Default to one-at-a-time: several 7B models at once will OOM a single phone.
+  const [sequential, setSequential] = useState(true);
   const [answers, setAnswers] = useState<Record<string, Answer>>({});
   const [running, setRunning] = useState(false);
   const [addingModel, setAddingModel] = useState(false);
   const [synthesis, setSynthesis] = useState<Answer | null>(null);
   const [judge, setJudge] = useState<{ backend: "ollama" | "llamacpp"; modelId: string } | null>(null);
   const abortsRef = useRef<AbortController[]>([]);
+  const stoppedRef = useRef(false);
 
   useEffect(() => {
     Promise.all([
@@ -112,6 +116,7 @@ export default function CouncilPage() {
   }
 
   function stop() {
+    stoppedRef.current = true;
     abortsRef.current.forEach((c) => c.abort());
     abortsRef.current = [];
     setRunning(false);
@@ -122,29 +127,39 @@ export default function CouncilPage() {
     if (!q || participants.length === 0 || running) return;
     setSynthesis(null);
     setRunning(true);
-    setAnswers(Object.fromEntries(participants.map((p) => [p.key, { content: "", running: true }])));
+    stoppedRef.current = false;
+    setAnswers(Object.fromEntries(participants.map((p) => [p.key, { content: "", running: sequential ? false : true }])));
     abortsRef.current = [];
 
-    await Promise.all(
-      participants.map(async (p) => {
-        const ctrl = new AbortController();
-        abortsRef.current.push(ctrl);
-        try {
-          await streamAsk(
-            { backend: p.backend, modelId: p.modelId, prompt: q, systemPrompt: p.systemPrompt, wikiEnabled: wiki && (p.wikiDefault ?? true) },
-            ctrl.signal,
-            (d) => setAnswers((prev) => ({ ...prev, [p.key]: { ...prev[p.key], content: (prev[p.key]?.content ?? "") + d } })),
-            (e) => setAnswers((prev) => ({ ...prev, [p.key]: { ...prev[p.key], error: friendlyError(e) } })),
-          );
-        } catch (err) {
-          if (err instanceof Error && err.name !== "AbortError") {
-            setAnswers((prev) => ({ ...prev, [p.key]: { ...prev[p.key], error: friendlyError(err.message) } }));
-          }
-        } finally {
-          setAnswers((prev) => ({ ...prev, [p.key]: { ...prev[p.key], running: false } }));
+    const runOne = async (p: Participant) => {
+      const ctrl = new AbortController();
+      abortsRef.current.push(ctrl);
+      setAnswers((prev) => ({ ...prev, [p.key]: { ...prev[p.key], running: true } }));
+      try {
+        await streamAsk(
+          { backend: p.backend, modelId: p.modelId, prompt: q, systemPrompt: p.systemPrompt, wikiEnabled: wiki && (p.wikiDefault ?? true), ragEnabled: brain },
+          ctrl.signal,
+          (d) => setAnswers((prev) => ({ ...prev, [p.key]: { ...prev[p.key], content: (prev[p.key]?.content ?? "") + d } })),
+          (e) => setAnswers((prev) => ({ ...prev, [p.key]: { ...prev[p.key], error: friendlyError(e) } })),
+        );
+      } catch (err) {
+        if (err instanceof Error && err.name !== "AbortError") {
+          setAnswers((prev) => ({ ...prev, [p.key]: { ...prev[p.key], error: friendlyError(err.message) } }));
         }
-      }),
-    );
+      } finally {
+        setAnswers((prev) => ({ ...prev, [p.key]: { ...prev[p.key], running: false } }));
+      }
+    };
+
+    if (sequential) {
+      // One model at a time: safe for a single phone's RAM.
+      for (const p of participants) {
+        if (stoppedRef.current) break;
+        await runOne(p);
+      }
+    } else {
+      await Promise.all(participants.map(runOne));
+    }
     setRunning(false);
   }
 
@@ -237,6 +252,12 @@ export default function CouncilPage() {
           )}
           <label className="flex items-center gap-1.5 text-xs text-ink-dim justify-center">
             <input type="checkbox" checked={wiki} onChange={() => setWiki((v) => !v)} /> Wiki
+          </label>
+          <label className="flex items-center gap-1.5 text-xs text-ink-dim justify-center">
+            <input type="checkbox" checked={brain} onChange={() => setBrain((v) => !v)} /> Brain
+          </label>
+          <label className="flex items-center gap-1.5 text-xs text-ink-dim justify-center" title="Run one model at a time — safe for a single phone's RAM">
+            <input type="checkbox" checked={sequential} onChange={() => setSequential((v) => !v)} /> 1×1
           </label>
         </div>
       </div>

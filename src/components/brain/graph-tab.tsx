@@ -225,6 +225,21 @@ export function GraphTab() {
     });
   }, []);
 
+  const patchHub = useCallback(async (patch: { label?: string; emoji?: string; color?: string }) => {
+    const gn = graphNode("hub");
+    if (gn) {
+      if (patch.label !== undefined) gn.label = patch.label || "brain";
+      if (patch.emoji !== undefined) gn.emoji = patch.emoji;
+      if (patch.color !== undefined) gn.color = patch.color;
+      kickRef.current();
+    }
+    await fetch("/api/brain/hub", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(patch),
+    });
+  }, []);
+
   const recolorAgent = useCallback(async (nodeId: string, color: string) => {
     const gn = graphNode(nodeId);
     if (gn) {
@@ -289,6 +304,8 @@ export function GraphTab() {
       if (patch.emoji !== undefined) cp.emoji = patch.emoji;
       if (patch.parentId !== undefined) cp.parentId = patch.parentId;
       void patchCustom(selected.id, cp);
+    } else if (selected.kind === "hub") {
+      void patchHub({ label: patch.label, emoji: patch.emoji, color: patch.color });
     } else if (selected.kind === "agent" && patch.color !== undefined) {
       void recolorAgent(selected.id, patch.color);
     }
@@ -302,12 +319,14 @@ export function GraphTab() {
       fetch("/api/models").then((r) => r.json()),
       fetch("/api/brain/nodes").then((r) => r.json()),
       fetch("/api/brain/links").then((r) => r.json()),
-    ]).then(([agentsData, docsData, modelsData, customData, linksData]) => {
+      fetch("/api/brain/hub").then((r) => r.json()),
+    ]).then(([agentsData, docsData, modelsData, customData, linksData, hubData]) => {
       if (cancelled) return;
       const agentList: Agent[] = agentsData.agents ?? [];
       const docs: BrainDoc[] = docsData.documents ?? [];
       const custom: CustomNode[] = customData.nodes ?? [];
       const customLinks: CustomLink[] = linksData.links ?? [];
+      const hub = hubData.hub ?? { label: "brain", emoji: "🧠", color: "#e06c75" };
       optionsRef.current = modelsData.options ?? [];
       setAgents(agentList);
       setCustomNodes(custom);
@@ -338,7 +357,7 @@ export function GraphTab() {
         nodes.push(n);
       };
 
-      place({ id: "hub", kind: "hub", label: "brain", emoji: "🧠", color: "#e06c75", r: 26, x: cx, y: cy, vx: 0, vy: 0, fixed: true, showLabel: true });
+      place({ id: "hub", kind: "hub", label: hub.label, emoji: hub.emoji, color: hub.color, r: 26, x: cx, y: cy, vx: 0, vy: 0, fixed: true, showLabel: true });
 
       for (const a of agentList) {
         place({ id: `agent:${a.id}`, kind: "agent", label: a.name, emoji: a.emoji, color: a.color ?? "#e06c75", r: 20, x: cx + rand(180), y: cy + rand(180), vx: 0, vy: 0, showLabel: true, agent: a });
@@ -752,7 +771,7 @@ export function GraphTab() {
             </button>
           </div>
 
-          {selected.kind === "custom" && (
+          {(selected.kind === "custom" || selected.kind === "hub") && (
             <div className="flex gap-2">
               <input
                 className="w-14 rounded-md bg-[var(--surface-2)] border border-[var(--border)] px-2 py-1.5 text-sm text-ink text-center focus:outline-none focus:border-accent"

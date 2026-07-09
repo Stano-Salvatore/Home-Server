@@ -80,7 +80,7 @@ export function getMemoryContext(): string | null {
   return facts.map((f) => `- ${f.content}`).join("\n");
 }
 
-async function getRagContext(
+export async function getRagContext(
   query: string,
   projectId: string | null,
 ): Promise<{ block: string; citations: Citation[] } | null> {

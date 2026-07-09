@@ -1,6 +1,6 @@
 import { backendFor } from "@/server/backends/registry";
 import type { ChatMessage } from "@/server/backends/types";
-import { getMemoryContext, getWikipediaContext } from "@/server/chat/service";
+import { getMemoryContext, getWikipediaContext, getRagContext } from "@/server/chat/service";
 
 export type CouncilAsk = {
   backend: "ollama" | "llamacpp";
@@ -8,6 +8,7 @@ export type CouncilAsk = {
   prompt: string;
   systemPrompt?: string;
   wikiEnabled?: boolean;
+  ragEnabled?: boolean;
 };
 
 /**
@@ -24,6 +25,16 @@ export async function* askOneShot(
 
   const memory = getMemoryContext();
   if (memory) messages.push({ role: "system", content: `Pinned facts about the user:\n\n${memory}` });
+
+  if (opts.ragEnabled) {
+    const rag = await getRagContext(opts.prompt, null);
+    if (rag) {
+      messages.push({
+        role: "system",
+        content: `Relevant context from the user's notes/library (cite as [n] when used):\n\n${rag.block}`,
+      });
+    }
+  }
 
   if (opts.wikiEnabled) {
     const wiki = await getWikipediaContext(opts.prompt);
