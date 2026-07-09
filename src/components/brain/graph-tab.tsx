@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Plus, Pencil, Trash2 } from "lucide-react";
+import { Plus, Pencil, Trash2, Spline, Link2, Unlink } from "lucide-react";
 import type { ModelOption } from "@/lib/types";
 import { resolveAgentOption } from "@/lib/agentModel";
 
@@ -34,8 +34,20 @@ type Node = {
   showLabel?: boolean;
   agent?: Agent;
 };
-type Edge = { a: string; b: string; len: number };
+type Edge = { a: string; b: string; len: number; linkId?: string };
+type CustomLink = { id: string; a: string; b: string };
 type Selected = { id: string; kind: string; label: string; color: string; emoji: string; parentId: string };
+type GraphPrefs = { lineWidth: number; curved: boolean };
+
+const PREFS_KEY = "nedory_graph_prefs";
+function loadPrefs(): GraphPrefs {
+  try {
+    const p = JSON.parse(localStorage.getItem(PREFS_KEY) || "{}");
+    return { lineWidth: p.lineWidth ?? 1, curved: !!p.curved };
+  } catch {
+    return { lineWidth: 1, curved: false };
+  }
+}
 
 const SOURCE_COLOR: Record<string, string> = {
   obsidian: "#a78bfa",
@@ -77,11 +89,29 @@ export function GraphTab() {
   const [selected, setSelected] = useState<Selected | null>(null);
   const [agents, setAgents] = useState<Agent[]>([]);
   const [customNodes, setCustomNodes] = useState<CustomNode[]>([]);
+  const [links, setLinks] = useState<CustomLink[]>([]);
+  const [prefs, setPrefs] = useState<GraphPrefs>({ lineWidth: 1, curved: false });
+  const prefsRef = useRef<GraphPrefs>({ lineWidth: 1, curved: false });
+  const [showLines, setShowLines] = useState(false);
   const router = useRouter();
 
   useEffect(() => {
     editModeRef.current = editMode;
   }, [editMode]);
+  useEffect(() => {
+    const p = loadPrefs();
+    setPrefs(p);
+    prefsRef.current = p;
+  }, []);
+  useEffect(() => {
+    prefsRef.current = prefs;
+    try {
+      localStorage.setItem(PREFS_KEY, JSON.stringify(prefs));
+    } catch {
+      // ignore
+    }
+    kickRef.current();
+  }, [prefs]);
   useEffect(() => {
     selectedIdRef.current = selected?.id ?? null;
     kickRef.current();
@@ -111,14 +141,13 @@ export function GraphTab() {
   );
 
   const selectNode = useCallback((n: Node) => {
-    if (n.kind !== "agent" && n.kind !== "custom") return;
     setSelected({
       id: n.id,
       kind: n.kind,
       label: n.label,
       color: n.color,
       emoji: n.emoji ?? "",
-      parentId: edgesRef.current.find((e) => e.b === n.id)?.a ?? "hub",
+      parentId: edgesRef.current.find((e) => e.b === n.id && !e.linkId)?.a ?? "hub",
     });
   }, []);
 
@@ -224,6 +253,31 @@ export function GraphTab() {
     });
   }, []);
 
+  const addLink = useCallback(async (a: string, b: string) => {
+    const res = await fetch("/api/brain/links", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ a, b }),
+    });
+    const d = await res.json();
+    if (d.link) {
+      edgesRef.current.push({ a, b, len: 120, linkId: d.link.id });
+      setLinks((prev) => [...prev, d.link]);
+      kickRef.current();
+    }
+  }, []);
+
+  const removeLink = useCallback(async (id: string) => {
+    edgesRef.current = edgesRef.current.filter((e) => e.linkId !== id);
+    setLinks((prev) => prev.filter((l) => l.id !== id));
+    kickRef.current();
+    await fetch("/api/brain/links", {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id }),
+    });
+  }, []);
+
   const applyEdit = (patch: Partial<Selected>) => {
     if (!selected) return;
     const next = { ...selected, ...patch };
@@ -247,14 +301,17 @@ export function GraphTab() {
       fetch("/api/brain/documents").then((r) => r.json()),
       fetch("/api/models").then((r) => r.json()),
       fetch("/api/brain/nodes").then((r) => r.json()),
-    ]).then(([agentsData, docsData, modelsData, customData]) => {
+      fetch("/api/brain/links").then((r) => r.json()),
+    ]).then(([agentsData, docsData, modelsData, customData, linksData]) => {
       if (cancelled) return;
       const agentList: Agent[] = agentsData.agents ?? [];
       const docs: BrainDoc[] = docsData.documents ?? [];
       const custom: CustomNode[] = customData.nodes ?? [];
+      const customLinks: CustomLink[] = linksData.links ?? [];
       optionsRef.current = modelsData.options ?? [];
       setAgents(agentList);
       setCustomNodes(custom);
+      setLinks(customLinks);
 
       const canvas = canvasRef.current;
       const cx = (canvas?.clientWidth ?? 800) / 2;
@@ -336,6 +393,10 @@ export function GraphTab() {
       for (const c of custom) {
         place({ id: c.id, kind: "custom", label: c.label, color: c.color, emoji: c.emoji, r: 11, x: cx + rand(220), y: cy + rand(220), vx: 0, vy: 0, showLabel: true });
         addEdge(c.parentId || "hub", c.id, 120);
+      }
+
+      for (const l of customLinks) {
+        edges.push({ a: l.a, b: l.b, len: 130, linkId: l.id });
       }
 
       for (const n of nodes) {
@@ -448,15 +509,26 @@ export function GraphTab() {
       }
 
       ctx.clearRect(0, 0, w, h);
-      ctx.lineWidth = 1;
-      ctx.strokeStyle = "rgba(255,255,255,0.08)";
+      const pf = prefsRef.current;
       for (const e of edges) {
         const a = byId.get(e.a);
         const b = byId.get(e.b);
         if (!a || !b) continue;
+        // Custom links are drawn in the accent, a touch thicker, so hand-drawn
+        // connections stand out from the auto-derived structure.
+        ctx.lineWidth = e.linkId ? pf.lineWidth + 0.75 : pf.lineWidth;
+        ctx.strokeStyle = e.linkId ? "rgba(224,108,117,0.55)" : `rgba(255,255,255,${0.05 + pf.lineWidth * 0.03})`;
         ctx.beginPath();
         ctx.moveTo(a.x, a.y);
-        ctx.lineTo(b.x, b.y);
+        if (pf.curved) {
+          const mx = (a.x + b.x) / 2;
+          const my = (a.y + b.y) / 2;
+          const dx = b.x - a.x;
+          const dy = b.y - a.y;
+          ctx.quadraticCurveTo(mx - dy * 0.12, my + dx * 0.12, b.x, b.y);
+        } else {
+          ctx.lineTo(b.x, b.y);
+        }
         ctx.stroke();
       }
       const selId = selectedIdRef.current;
@@ -607,6 +679,9 @@ export function GraphTab() {
     ...agents.map((a) => ({ id: `agent:${a.id}`, label: `${a.emoji} ${a.name}` })),
     ...customNodes.map((c) => ({ id: c.id, label: `${c.emoji ?? "●"} ${c.label}` })),
   ];
+  const selectedLinks = selected ? links.filter((l) => l.a === selected.id || l.b === selected.id) : [];
+  const linkedIds = new Set(selectedLinks.map((l) => (l.a === selected?.id ? l.b : l.a)));
+  const labelOf = (id: string) => parentOptions.find((o) => o.id === id)?.label ?? "a note";
 
   return (
     <div className="flex flex-col gap-3">
@@ -623,6 +698,23 @@ export function GraphTab() {
           <button onClick={() => { setEditMode((v) => !v); if (editMode) setSelected(null); }} className={`flex items-center gap-1 rounded-md border px-2.5 py-1 text-xs ${editMode ? "text-accent border-accent" : "text-ink-dim hover:text-ink"}`} style={{ borderColor: editMode ? undefined : "var(--border)", background: "var(--surface-2)" }}>
             <Pencil size={12} /> Edit
           </button>
+          <div className="relative">
+            <button onClick={() => setShowLines((v) => !v)} className="flex items-center gap-1 rounded-md border px-2.5 py-1 text-xs text-ink-dim hover:text-ink" style={{ borderColor: "var(--border)", background: "var(--surface-2)" }}>
+              <Spline size={12} /> Lines
+            </button>
+            {showLines && (
+              <div className="absolute right-0 top-8 z-10 w-52 rounded-md border p-3 flex flex-col gap-2.5 text-xs" style={{ borderColor: "var(--border)", background: "var(--surface-2)" }}>
+                <label className="flex flex-col gap-1 text-ink-dim">
+                  <span>Line width — {prefs.lineWidth.toFixed(1)}px</span>
+                  <input type="range" min={0.5} max={4} step={0.5} value={prefs.lineWidth} onChange={(e) => setPrefs((p) => ({ ...p, lineWidth: Number(e.target.value) }))} />
+                </label>
+                <label className="flex items-center gap-2 text-ink-dim">
+                  <input type="checkbox" checked={prefs.curved} onChange={(e) => setPrefs((p) => ({ ...p, curved: e.target.checked }))} />
+                  Curved connections
+                </label>
+              </div>
+            )}
+          </div>
           <button onClick={resetLayout} className="rounded-md border px-2.5 py-1 text-xs text-ink-dim hover:text-ink" style={{ borderColor: "var(--border)", background: "var(--surface-2)" }}>
             Reset
           </button>
@@ -713,6 +805,39 @@ export function GraphTab() {
               </button>
             </div>
           )}
+
+          <div className="flex flex-col gap-1.5 border-t pt-2" style={{ borderColor: "var(--border)" }}>
+            <span className="text-xs text-ink-dim flex items-center gap-1"><Link2 size={12} /> Connections</span>
+            {selectedLinks.length > 0 && (
+              <div className="flex flex-wrap gap-1.5">
+                {selectedLinks.map((l) => {
+                  const other = l.a === selected.id ? l.b : l.a;
+                  return (
+                    <span key={l.id} className="inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs text-ink-dim" style={{ borderColor: "var(--border)" }}>
+                      {labelOf(other)}
+                      <button onClick={() => removeLink(l.id)} className="hover:text-accent" aria-label="Remove connection">
+                        <Unlink size={11} />
+                      </button>
+                    </span>
+                  );
+                })}
+              </div>
+            )}
+            <select
+              className="rounded-md bg-[var(--surface-2)] border border-[var(--border)] px-2 py-1 text-xs text-ink focus:outline-none focus:border-accent"
+              value=""
+              onChange={(e) => {
+                if (e.target.value) void addLink(selected.id, e.target.value);
+              }}
+            >
+              <option value="">＋ connect to…</option>
+              {parentOptions
+                .filter((o) => o.id !== selected.id && !linkedIds.has(o.id))
+                .map((o) => (
+                  <option key={o.id} value={o.id}>{o.label}</option>
+                ))}
+            </select>
+          </div>
 
           {selected.kind === "agent" && (
             <p className="text-xs text-ink-dim">Rename or change this agent&apos;s model in the Agents tab.</p>
