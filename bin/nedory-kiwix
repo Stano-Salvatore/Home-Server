@@ -1,0 +1,27 @@
+#!/usr/bin/env bash
+# Nedory (kiwix) — serve offline Wikipedia from a library box like the Doogee
+# tablet. Kiwix only, zero inference — this device just holds the big ZIMs and
+# answers lookups from the phones over Tailscale.
+#
+# Big ZIMs may not fit internal storage. Put them on an SD card and point at it:
+#   ZIM_DIR=/storage/XXXX-XXXX/zim nedory-kiwix
+# (defaults to ~/zim). Run `termux-setup-storage` once to reach the SD card.
+
+command -v termux-wake-lock >/dev/null 2>&1 && termux-wake-lock || true
+
+ZIM_DIR="${ZIM_DIR:-$HOME/zim}"
+
+if ls "$ZIM_DIR"/*.zim >/dev/null 2>&1; then
+  if ! pgrep -f "kiwix-serve" >/dev/null 2>&1; then
+    nohup kiwix-serve --port 8080 "$ZIM_DIR"/*.zim >"$HOME/kiwix.log" 2>&1 &
+    echo "◢ kiwix serving $ZIM_DIR/*.zim on :8080"
+  else
+    echo "◢ kiwix already running"
+  fi
+else
+  echo "◢ no *.zim in $ZIM_DIR yet — grab one, e.g.:"
+  echo "    bin/get-zim wikipedia_en_all_nopic     # full EN, no images (~tens of GB)"
+  echo "    bin/get-zim wikipedia_cs_all_nopic     # whole Czech Wikipedia"
+fi
+
+echo "◢ Nedory: library box up."
