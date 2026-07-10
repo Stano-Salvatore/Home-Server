@@ -36,6 +36,22 @@ export async function listLoadedModels(host: string): Promise<RunningModel[]> {
   }
 }
 
+// Loaded models with their in-memory footprint (from /api/ps). This is the best
+// available proxy for how much RAM a node is using right now.
+export async function listLoadedSizes(host: string): Promise<{ tag: string; bytes: number }[]> {
+  try {
+    const res = await fetch(`${clean(host)}/api/ps`, { cache: "no-store" });
+    if (!res.ok) return [];
+    const data = await res.json();
+    return (data.models ?? []).map((m: { name: string; size?: number; size_vram?: number }) => ({
+      tag: m.name,
+      bytes: m.size ?? m.size_vram ?? 0,
+    }));
+  } catch {
+    return [];
+  }
+}
+
 export async function isOllamaReachable(host: string): Promise<boolean> {
   try {
     const res = await fetch(`${clean(host)}/api/tags`, { cache: "no-store" });

@@ -1,4 +1,4 @@
-import { listLoadedModels, listInstalledTags, isOllamaReachable, ollamaBackend } from "./ollama";
+import { listLoadedSizes, listInstalledTags, isOllamaReachable, ollamaBackend } from "./ollama";
 import { llamaCppBackend } from "./llamacpp";
 import { listNodes, makeOllamaTarget } from "@/server/nodes/nodes";
 import type { ModelBackend, RunningModel } from "./types";
@@ -11,17 +11,19 @@ export type NodeStatus = {
   url: string;
   online: boolean;
   loaded: string[]; // tags currently loaded in memory
+  loadedMem: { tag: string; bytes: number }[]; // loaded models + their RAM footprint
+  loadedBytes: number; // total RAM held by loaded models on this node
   installed: string[]; // all installed tags
 };
 
-/** Probe every Ollama node: reachability + loaded/installed models. */
+/** Probe every Ollama node: reachability + loaded/installed models + memory. */
 export async function probeNodes(): Promise<NodeStatus[]> {
   const nodes = listNodes();
   return Promise.all(
     nodes.map(async (node): Promise<NodeStatus> => {
-      const [online, loaded, installed] = await Promise.all([
+      const [online, loadedMem, installed] = await Promise.all([
         isOllamaReachable(node.url),
-        listLoadedModels(node.url),
+        listLoadedSizes(node.url),
         listInstalledTags(node.url),
       ]);
       return {
@@ -29,7 +31,9 @@ export async function probeNodes(): Promise<NodeStatus[]> {
         name: node.name,
         url: node.url,
         online,
-        loaded: loaded.map((m) => m.id),
+        loaded: loadedMem.map((m) => m.tag),
+        loadedMem,
+        loadedBytes: loadedMem.reduce((s, m) => s + m.bytes, 0),
         installed: installed.map((t) => t.name),
       };
     }),

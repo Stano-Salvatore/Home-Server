@@ -12,8 +12,16 @@ type NodeStatus = {
   url: string;
   online: boolean;
   loaded: string[];
+  loadedMem?: { tag: string; bytes: number }[];
+  loadedBytes?: number;
   installed: string[];
 };
+
+function fmtGB(bytes: number): string {
+  if (!bytes) return "0";
+  const gb = bytes / 1024 ** 3;
+  return gb >= 1 ? `${gb.toFixed(1)} GB` : `${Math.round(bytes / 1024 ** 2)} MB`;
+}
 
 type LlamaServer = { id: string; name: string; port: number; status: string };
 type ServiceStatus = { name: string; kind: string; url: string; online: boolean };
@@ -48,6 +56,9 @@ export default function NodesPage() {
 
   useEffect(() => {
     fetchNodes().then(apply);
+    // Live refresh so the memory/loaded view stays current without a spinner.
+    const t = setInterval(() => fetchNodes().then(apply), 8000);
+    return () => clearInterval(t);
   }, [fetchNodes, apply]);
 
   async function addNode() {
@@ -131,6 +142,13 @@ export default function NodesPage() {
                       </Badge>
                     </div>
                     <div className="text-xs text-ink-dim mt-0.5">{node.url}</div>
+                    {node.online && (node.loadedBytes ?? 0) > 0 && (
+                      <div className="text-xs mt-1 flex items-center gap-1.5">
+                        <span className="w-1.5 h-1.5 rounded-full bg-[var(--color-term-gold)]" />
+                        <span className="text-ink">{fmtGB(node.loadedBytes ?? 0)}</span>
+                        <span className="text-ink-dim">in memory</span>
+                      </div>
+                    )}
                   </div>
                 </div>
                 {nodes.length > 1 && (
@@ -153,6 +171,7 @@ export default function NodesPage() {
                     <div className="flex flex-wrap gap-1.5">
                       {node.installed.map((tag) => {
                         const loaded = node.loaded.includes(tag);
+                        const bytes = (node.loadedMem ?? []).find((m) => m.tag === tag)?.bytes ?? 0;
                         return (
                           <span
                             key={tag}
@@ -165,6 +184,7 @@ export default function NodesPage() {
                           >
                             {loaded && <span className="w-1.5 h-1.5 rounded-full bg-[var(--color-term-green)]" />}
                             {tag}
+                            {loaded && bytes > 0 && <span className="opacity-70">· {fmtGB(bytes)}</span>}
                           </span>
                         );
                       })}

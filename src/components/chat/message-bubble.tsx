@@ -4,6 +4,7 @@ import { useState } from "react";
 import type { ChatUIMessage } from "@/lib/useChatStream";
 import { Markdown } from "./markdown";
 import { ThinkingSpiral } from "@/components/ui/thinking-spiral";
+import { SpeakButton } from "@/components/ui/speak-button";
 
 export function MessageBubble({ message }: { message: ChatUIMessage }) {
   const isUser = message.role === "user";
@@ -65,6 +66,7 @@ export function MessageBubble({ message }: { message: ChatUIMessage }) {
             >
               {saved ? "Saved to Obsidian" : saving ? "Saving…" : "Save to Obsidian"}
             </button>
+            <SpeakButton text={message.content} />
             {error && <span className="text-xs text-red-400">{error}</span>}
           </div>
         )}
