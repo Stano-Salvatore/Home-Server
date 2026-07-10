@@ -14,6 +14,7 @@ type Agent = {
   systemPrompt?: string;
   wikiDefault?: boolean;
   color?: string;
+  scopeId?: string | null;
 };
 type BrainDoc = { id: string; title: string; sourceType: string; sourcePath: string };
 type CustomNode = { id: string; label: string; color: string; emoji?: string; parentId?: string };
@@ -132,6 +133,7 @@ export function GraphTab() {
           title: `${agent.emoji} ${agent.name}`,
           systemPrompt: agent.systemPrompt || undefined,
           wikiEnabled: agent.wikiDefault ?? false,
+          scopeId: agent.scopeId ?? undefined,
         }),
       });
       const data = await res.json();

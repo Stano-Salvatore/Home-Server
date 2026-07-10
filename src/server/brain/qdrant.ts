@@ -41,6 +41,9 @@ function toQdrantFilter(f?: MetaFilter) {
   if (f.conversationIdNe !== undefined) {
     must_not.push({ key: "conversation_id", match: { value: f.conversationIdNe } });
   }
+  if (f.documentIdIn !== undefined) {
+    must.push({ key: "document_id", match: { any: f.documentIdIn } });
+  }
   const filter: Record<string, unknown> = {};
   if (must.length) filter.must = must;
   if (must_not.length) filter.must_not = must_not;

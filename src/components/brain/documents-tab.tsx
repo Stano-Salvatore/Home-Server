@@ -12,6 +12,7 @@ type Document = {
   title: string;
   indexedAt: number;
 };
+type Scope = { id: string; label: string; color: string; emoji?: string };
 
 export function DocumentsTab() {
   const [documents, setDocuments] = useState<Document[]>([]);
@@ -22,11 +23,45 @@ export function DocumentsTab() {
   const [adding, setAdding] = useState(false);
   const [rescanning, setRescanning] = useState(false);
   const [rescanMsg, setRescanMsg] = useState<string | null>(null);
+  const [scopes, setScopes] = useState<Scope[]>([]);
+  const [members, setMembers] = useState<Record<string, string[]>>({});
 
   function refresh() {
     fetch("/api/brain/documents")
       .then((r) => r.json())
       .then((data) => setDocuments(data.documents ?? []));
+  }
+
+  function refreshScopes() {
+    fetch("/api/brain/scopes")
+      .then((r) => r.json())
+      .then((d) => {
+        setScopes(d.scopes ?? []);
+        setMembers(d.members ?? {});
+      });
+  }
+
+  const scopesOf = (docId: string) => scopes.filter((s) => members[s.id]?.includes(docId));
+
+  async function toggleScope(docId: string, scopeId: string, add: boolean) {
+    const current = scopes.filter((s) => members[s.id]?.includes(docId)).map((s) => s.id);
+    const next = add ? [...current, scopeId] : current.filter((id) => id !== scopeId);
+    setMembers((prev) => {
+      const m: Record<string, string[]> = {};
+      for (const s of scopes) {
+        const has = next.includes(s.id);
+        const list = new Set(prev[s.id] ?? []);
+        if (has) list.add(docId);
+        else list.delete(docId);
+        m[s.id] = [...list];
+      }
+      return m;
+    });
+    await fetch("/api/brain/scopes", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ docId, scopeIds: next }),
+    });
   }
 
   async function rescanVault() {
@@ -47,6 +82,7 @@ export function DocumentsTab() {
 
   useEffect(() => {
     refresh();
+    refreshScopes();
   }, []);
 
   async function toggleExpand(id: string) {
@@ -149,6 +185,33 @@ export function DocumentsTab() {
                 </Button>
               </div>
             </div>
+            {scopes.length > 0 && (
+              <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                {scopesOf(doc.id).map((s) => (
+                  <span
+                    key={s.id}
+                    className="inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px]"
+                    style={{ borderColor: s.color, color: "var(--ink)" }}
+                  >
+                    {s.emoji ?? "◆"} {s.label}
+                    <button onClick={() => toggleScope(doc.id, s.id, false)} className="text-ink-dim hover:text-accent">×</button>
+                  </span>
+                ))}
+                <select
+                  className="rounded-md bg-[var(--surface-2)] border border-[var(--border)] px-2 py-0.5 text-[11px] text-ink-dim focus:outline-none focus:border-accent"
+                  value=""
+                  onChange={(e) => e.target.value && toggleScope(doc.id, e.target.value, true)}
+                  title="Add this document to a scope"
+                >
+                  <option value="">＋ scope</option>
+                  {scopes
+                    .filter((s) => !members[s.id]?.includes(doc.id))
+                    .map((s) => (
+                      <option key={s.id} value={s.id}>{s.emoji ?? "◆"} {s.label}</option>
+                    ))}
+                </select>
+              </div>
+            )}
             {expanded === doc.id && (
               <div className="mt-3 flex flex-col gap-2 border-t border-neutral-800 pt-3">
                 {chunks.map((c) => (

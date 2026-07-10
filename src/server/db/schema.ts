@@ -48,6 +48,8 @@ export const conversations = sqliteTable("conversations", {
   modelId: text("model_id").notNull(),
   systemPrompt: text("system_prompt"),
   projectId: text("project_id").references(() => projects.id, { onDelete: "set null" }),
+  // Optional Brain scope (a custom-node id) — limits RAG to that node's members.
+  scopeId: text("scope_id"),
   ragEnabled: integer("rag_enabled", { mode: "boolean" }).notNull().default(false),
   wikiEnabled: integer("wiki_enabled", { mode: "boolean" }).notNull().default(false),
   createdAt: integer("created_at")

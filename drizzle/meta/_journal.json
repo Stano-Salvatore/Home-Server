@@ -22,6 +22,13 @@
       "when": 1783446480778,
       "tag": "0002_useful_falcon",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "6",
+      "when": 1783623982540,
+      "tag": "0003_careless_hiroim",
+      "breakpoints": true
     }
   ]
 }

@@ -28,7 +28,7 @@ export async function GET() {
 }
 
 export async function POST(req: NextRequest) {
-  const { name, emoji, modelTag, systemPrompt, description, wikiDefault } = await req.json();
+  const { name, emoji, modelTag, systemPrompt, description, wikiDefault, scopeId } = await req.json();
   if (!name || !modelTag) {
     return NextResponse.json({ error: "name and modelTag are required" }, { status: 400 });
   }
@@ -39,6 +39,7 @@ export async function POST(req: NextRequest) {
     systemPrompt,
     description,
     wikiDefault: !!wikiDefault,
+    scopeId: scopeId || null,
   });
   return NextResponse.json({ agent });
 }

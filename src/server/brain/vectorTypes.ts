@@ -2,6 +2,7 @@ export type ChunkMeta = {
   projectId: string | null;
   sourceType: string;
   conversationId: string | null; // set only for chat-memory chunks
+  documentId?: string;
 };
 
 // Declarative scope filter understood by both the in-memory and Qdrant backends
@@ -11,6 +12,7 @@ export type MetaFilter = {
   sourceTypeNe?: string;
   projectIdIn?: (string | null)[];
   conversationIdNe?: string;
+  documentIdIn?: string[]; // limit to a specific set of documents (a scope)
 };
 
 export type IndexedPoint = {
@@ -31,5 +33,7 @@ export function metaMatches(meta: ChunkMeta, f?: MetaFilter): boolean {
   if (f.sourceTypeNe !== undefined && meta.sourceType === f.sourceTypeNe) return false;
   if (f.projectIdIn !== undefined && !f.projectIdIn.includes(meta.projectId)) return false;
   if (f.conversationIdNe !== undefined && meta.conversationId === f.conversationIdNe) return false;
+  if (f.documentIdIn !== undefined && !(meta.documentId && f.documentIdIn.includes(meta.documentId)))
+    return false;
   return true;
 }

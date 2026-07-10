@@ -120,12 +120,18 @@ export async function recallChatMemory(
   }
 }
 
-/** Filter for opt-in RAG: knowledge docs only (never chat memory), project-aware. */
-export function knowledgeFilter(projectId: string | null): MetaFilter {
+/** Filter for opt-in RAG: knowledge docs only (never chat memory), project-aware.
+ *  A scope (set of document ids) further narrows retrieval to those docs. */
+export function knowledgeFilter(
+  projectId: string | null,
+  scopeDocIds?: string[] | null,
+): MetaFilter {
   // Global knowledge (projectId null) is always available; project docs only
   // inside their own project.
-  return {
+  const filter: MetaFilter = {
     sourceTypeNe: "chat",
     projectIdIn: projectId ? [null, projectId] : [null],
   };
+  if (scopeDocIds) filter.documentIdIn = scopeDocIds;
+  return filter;
 }

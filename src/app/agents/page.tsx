@@ -16,7 +16,9 @@ type Agent = {
   systemPrompt?: string;
   description?: string;
   wikiDefault?: boolean;
+  scopeId?: string | null;
 };
+type Scope = { id: string; label: string; emoji?: string };
 
 export default function AgentsPage() {
   const [agents, setAgents] = useState<Agent[]>([]);
@@ -67,6 +69,7 @@ export default function AgentsPage() {
         title: `${agent.emoji} ${agent.name}`,
         systemPrompt: agent.systemPrompt || undefined,
         wikiEnabled: agent.wikiDefault ?? false,
+        scopeId: agent.scopeId ?? undefined,
       }),
     });
     const data = await res.json();
@@ -181,7 +184,15 @@ function AgentForm({
   const [description, setDescription] = useState(agent?.description ?? "");
   const [systemPrompt, setSystemPrompt] = useState(agent?.systemPrompt ?? "");
   const [wikiDefault, setWikiDefault] = useState(agent?.wikiDefault ?? false);
+  const [scopeId, setScopeId] = useState<string>(agent?.scopeId ?? "");
+  const [scopes, setScopes] = useState<Scope[]>([]);
   const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    fetch("/api/brain/scopes")
+      .then((r) => r.json())
+      .then((d) => setScopes(d.scopes ?? []));
+  }, []);
 
   // Unique ollama model tags across all nodes.
   const tags = [...new Set(options.filter((o) => o.backend === "ollama").map((o) => o.label))];
@@ -189,7 +200,7 @@ function AgentForm({
   async function save() {
     if (!name.trim() || !modelTag) return;
     setSaving(true);
-    const body = { id: agent?.id, name, emoji, modelTag, description, systemPrompt, wikiDefault };
+    const body = { id: agent?.id, name, emoji, modelTag, description, systemPrompt, wikiDefault, scopeId: scopeId || null };
     await fetch("/api/agents", {
       method: agent ? "PUT" : "POST",
       headers: { "Content-Type": "application/json" },
@@ -252,6 +263,24 @@ function AgentForm({
           />
           Ground with Wikipedia by default
         </label>
+        {scopes.length > 0 && (
+          <label className="flex items-center gap-2 text-xs text-ink-dim">
+            Data scope
+            <select
+              className="flex-1 rounded bg-[var(--surface-2)] border border-[var(--border)] px-2 py-1 text-sm text-ink focus:outline-none focus:border-accent"
+              value={scopeId}
+              onChange={(e) => setScopeId(e.target.value)}
+            >
+              <option value="">All of Brain</option>
+              {scopes.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.emoji ? `${s.emoji} ` : "◆ "}
+                  {s.label}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
         <div className="flex gap-2">
           <Button onClick={save} disabled={saving || !name.trim() || !modelTag}>
             {saving ? "saving…" : agent ? "save" : "create agent"}

@@ -24,6 +24,7 @@ export function createConversation(opts: {
   title?: string;
   systemPrompt?: string;
   projectId?: string | null;
+  scopeId?: string | null;
   ragEnabled?: boolean;
   wikiEnabled?: boolean;
 }) {
@@ -36,7 +37,9 @@ export function createConversation(opts: {
       modelId: opts.modelId,
       systemPrompt: opts.systemPrompt ?? null,
       projectId: opts.projectId ?? null,
-      ragEnabled: opts.ragEnabled ?? false,
+      scopeId: opts.scopeId ?? null,
+      // A pinned scope implies you want retrieval on.
+      ragEnabled: opts.ragEnabled ?? !!opts.scopeId,
       wikiEnabled: opts.wikiEnabled ?? false,
     })
     .run();
@@ -52,6 +55,7 @@ export function updateConversation(
     backend: string;
     modelId: string;
     projectId: string | null;
+    scopeId: string | null;
   }>,
 ) {
   db.update(conversations)
@@ -83,11 +87,12 @@ export function getMemoryContext(): string | null {
 export async function getRagContext(
   query: string,
   projectId: string | null,
+  scopeDocIds?: string[] | null,
 ): Promise<{ block: string; citations: Citation[] } | null> {
   try {
     const { searchBrain } = await import("@/server/brain/search");
     const { knowledgeFilter } = await import("@/server/brain/chatMemory");
-    const hits = await searchBrain(query, 5, { filter: knowledgeFilter(projectId) });
+    const hits = await searchBrain(query, 5, { filter: knowledgeFilter(projectId, scopeDocIds) });
     if (hits.length === 0) return null;
     const block = hits
       .map((h, i) => `[${i + 1}] (${h.title}) ${h.content}`)
@@ -180,7 +185,14 @@ async function* streamAssistant(
 
   const citationList: Citation[] = [];
   if (conversation.ragEnabled) {
-    const rag = await getRagContext(userContent, conversation.projectId);
+    // If the conversation is pinned to a scope, resolve its member docs so RAG
+    // only searches those.
+    let scopeDocIds: string[] | null = null;
+    if (conversation.scopeId) {
+      const { getScopeMembers } = await import("@/server/brain/scopes");
+      scopeDocIds = getScopeMembers(conversation.scopeId);
+    }
+    const rag = await getRagContext(userContent, conversation.projectId, scopeDocIds);
     if (rag) {
       citationList.push(...rag.citations);
       chatMessages.push({

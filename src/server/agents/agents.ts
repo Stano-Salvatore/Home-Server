@@ -10,6 +10,7 @@ export type Agent = {
   description?: string;
   wikiDefault?: boolean; // start conversations with Wikipedia grounding on
   color?: string; // node ring color in the Brain graph
+  scopeId?: string | null; // Brain scope this agent is limited to (a custom-node id)
 };
 
 const AGENTS_KEY = "agents";

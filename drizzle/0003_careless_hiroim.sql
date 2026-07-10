@@ -1,0 +1,1 @@
+ALTER TABLE `conversations` ADD `scope_id` text;

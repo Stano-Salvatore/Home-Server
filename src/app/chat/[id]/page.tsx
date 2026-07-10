@@ -13,15 +13,18 @@ type Conversation = {
   backend: string;
   modelId: string;
   projectId: string | null;
+  scopeId: string | null;
   ragEnabled: boolean;
   wikiEnabled: boolean;
 };
 type Project = { id: string; name: string; emoji: string | null };
+type Scope = { id: string; label: string; emoji?: string; color: string };
 
 export default function ConversationPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = usePromise(params);
   const [conversation, setConversation] = useState<Conversation | null>(null);
   const [projects, setProjects] = useState<Project[]>([]);
+  const [scopes, setScopes] = useState<Scope[]>([]);
   const [input, setInput] = useState("");
   const { messages, streaming, error, send, regenerate, stop, loadHistory } = useChatStream(id);
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -33,6 +36,9 @@ export default function ConversationPage({ params }: { params: Promise<{ id: str
     fetch("/api/projects")
       .then((r) => r.json())
       .then((d) => setProjects(d.projects ?? []));
+    fetch("/api/brain/scopes")
+      .then((r) => r.json())
+      .then((d) => setScopes(d.scopes ?? []));
     loadHistory(id);
   }, [id, loadHistory]);
 
@@ -85,6 +91,24 @@ export default function ConversationPage({ params }: { params: Promise<{ id: str
                   </option>
                 ))}
               </select>
+              {scopes.length > 0 && (
+                <select
+                  className="rounded-md bg-[var(--surface-2)] border border-[var(--border)] px-2 py-1 text-xs text-ink-dim focus:outline-none focus:border-accent"
+                  value={conversation.scopeId ?? ""}
+                  onChange={(e) =>
+                    patch(e.target.value ? { scopeId: e.target.value, ragEnabled: true } : { scopeId: null })
+                  }
+                  title="Limit Brain retrieval to a scope"
+                >
+                  <option value="">All Brain</option>
+                  {scopes.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.emoji ? `${s.emoji} ` : "◆ "}
+                      {s.label}
+                    </option>
+                  ))}
+                </select>
+              )}
             </>
           ) : (
             <span className="text-sm text-ink-dim">Loading…</span>
