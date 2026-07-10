@@ -31,4 +31,4 @@ else
   echo "◢ no ~/zim/*.zim yet — skipping kiwix (offline Wikipedia)"
 fi
 
-echo "◢ Nedory: S21 AI services up."
+echo "◢ Nedory: compute node AI services up."

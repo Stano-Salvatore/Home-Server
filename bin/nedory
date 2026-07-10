@@ -1,14 +1,14 @@
 #!/usr/bin/env bash
 # Nedory — one command to bring the whole workspace up from the S25.
 #
-#   nedory          (re)start everything: S21 brain (if configured) + local
+#   nedory          (re)start everything: compute nodes (if configured) + local
 #                   Ollama (if installed) + the dashboard
 #   nedory update   git pull + rebuild, then restart everything
 #   nedory status   check every service in the cluster
 #   nedory stop     stop the local dashboard
 #
-# To also wake the S21 compute node automatically, copy .nedory.env.example to
-# .nedory.env and set S21_SSH (needs an sshd running on the S21 — see that file).
+# To also wake compute nodes (S21, U10, …) automatically, copy .nedory.env.example
+# to .nedory.env and set <NODE>_SSH for each (needs an sshd running there — see that file).
 set -e
 
 # Resolve the repo root even when this is invoked via a symlink on PATH.
@@ -47,6 +47,10 @@ if [ "$1" = "status" ]; then
   check "dashboard (this phone)" "http://localhost:3000"
   check "S21 · Ollama"          "${S21_OLLAMA:-http://100.126.149.29:11434}/api/tags"
   check "S21 · Kiwix"           "${S21_KIWIX:-http://100.126.149.29:8080}"
+  if [ -n "${U10_SSH:-}" ]; then
+    check "U10 · Ollama"        "${U10_OLLAMA:-http://100.120.92.95:11434}/api/tags"
+    check "U10 · Kiwix"         "${U10_KIWIX:-http://100.120.92.95:8080}"
+  fi
   command -v ollama >/dev/null 2>&1 && check "local Ollama (embeddings)" "http://localhost:11434/api/tags"
   exit 0
 fi
@@ -61,15 +65,19 @@ if [ "$1" = "update" ]; then
   npm run build
 fi
 
-# 1) Wake the S21 compute node (Ollama + Kiwix) over Tailscale, if configured.
-if [ -n "${S21_SSH:-}" ]; then
-  echo "◢ Waking the S21 brain…"
-  if $S21_SSH 'bash -lc "~/Home-Server/bin/nedory-node"' </dev/null >/dev/null 2>&1; then
-    echo "  ✓ S21 up (Ollama + Kiwix)"
+# 1) Wake compute nodes (Ollama + Kiwix) over Tailscale, if configured.
+wake_node() { # name ssh
+  local name="$1" ssh="$2"
+  [ -n "$ssh" ] || return 0
+  echo "◢ Waking the $name…"
+  if $ssh 'bash -lc "~/Home-Server/bin/nedory-node"' </dev/null >/dev/null 2>&1; then
+    echo "  ✓ $name up (Ollama + Kiwix)"
   else
-    echo "  ⚠ couldn't reach the S21 — is sshd running there? (check S21_SSH in .nedory.env)"
+    echo "  ⚠ couldn't reach the $name — is sshd running there? (check ${name}_SSH in .nedory.env)"
   fi
-fi
+}
+wake_node "S21" "${S21_SSH:-}"
+wake_node "U10" "${U10_SSH:-}"
 
 # 2) Local Ollama on this phone, if installed (e.g. for on-device embeddings).
 if command -v ollama >/dev/null 2>&1 && ! pgrep -f "ollama serve" >/dev/null 2>&1; then
