@@ -7,6 +7,8 @@ import { Send, Square, Sparkles, Plus, X } from "lucide-react";
 import type { ModelOption } from "@/lib/types";
 import { resolveAgentOption } from "@/lib/agentModel";
 import { friendlyError } from "@/lib/friendlyError";
+import { Markdown } from "@/components/chat/markdown";
+import { ThinkingSpiral } from "@/components/ui/thinking-spiral";
 
 type Agent = { id: string; name: string; emoji: string; modelTag: string; systemPrompt?: string; wikiDefault?: boolean; color?: string };
 
@@ -275,10 +277,18 @@ export default function CouncilPage() {
                   <div className="flex items-center gap-2 px-3 py-2 border-b text-sm" style={{ borderColor: "var(--border)" }}>
                     <span>{p.emoji}</span>
                     <span className="font-medium" style={{ color: p.color }}>{p.name}</span>
-                    {a?.running && <span className="ml-auto text-[10px] text-ink-dim animate-pulse">thinking…</span>}
+                    {a?.running && <ThinkingSpiral size={12} className="ml-auto text-accent" />}
                   </div>
-                  <div className="p-3 text-sm text-ink whitespace-pre-wrap min-h-[60px]">
-                    {a?.error ? <span className="text-red-400 text-xs">{a.error}</span> : a?.content || <span className="text-ink-dim text-xs">—</span>}
+                  <div className="p-3 text-sm text-ink min-h-[60px]">
+                    {a?.error ? (
+                      <span className="text-red-400 text-xs">{a.error}</span>
+                    ) : a?.content ? (
+                      <Markdown content={a.content} />
+                    ) : a?.running ? (
+                      <span className="text-accent"><ThinkingSpiral /></span>
+                    ) : (
+                      <span className="text-ink-dim text-xs">—</span>
+                    )}
                   </div>
                 </div>
               );
@@ -298,9 +308,13 @@ export default function CouncilPage() {
               </Button>
             </div>
             {synthesis && (
-              <div className="text-sm text-ink whitespace-pre-wrap">
+              <div className="text-sm text-ink">
                 {synthesis.error && <span className="text-red-400 text-xs">{synthesis.error}</span>}
-                {synthesis.content || (synthesis.running ? <span className="text-ink-dim text-xs">thinking…</span> : null)}
+                {synthesis.content ? (
+                  <Markdown content={synthesis.content} />
+                ) : synthesis.running ? (
+                  <span className="text-accent"><ThinkingSpiral /></span>
+                ) : null}
               </div>
             )}
           </div>

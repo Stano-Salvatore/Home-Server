@@ -2,6 +2,8 @@
 
 import { useState } from "react";
 import type { ChatUIMessage } from "@/lib/useChatStream";
+import { Markdown } from "./markdown";
+import { ThinkingSpiral } from "@/components/ui/thinking-spiral";
 
 export function MessageBubble({ message }: { message: ChatUIMessage }) {
   const isUser = message.role === "user";
@@ -32,13 +34,19 @@ export function MessageBubble({ message }: { message: ChatUIMessage }) {
   return (
     <div className={`flex ${isUser ? "justify-end" : "justify-start"}`}>
       <div
-        className={`max-w-2xl rounded-lg px-4 py-2.5 text-sm leading-relaxed whitespace-pre-wrap ${
+        className={`max-w-2xl rounded-lg px-4 py-2.5 text-sm leading-relaxed ${
           isUser
-            ? "bg-accent text-black"
+            ? "bg-accent text-black whitespace-pre-wrap"
             : "bg-[var(--surface)] text-ink border border-[var(--border)]"
         }`}
       >
-        {message.content || (isUser ? "" : "…")}
+        {isUser ? (
+          message.content
+        ) : message.content ? (
+          <Markdown content={message.content} />
+        ) : (
+          <span className="text-accent inline-flex"><ThinkingSpiral /></span>
+        )}
         {message.citations && message.citations.length > 0 && (
           <div className="mt-2 pt-2 border-t border-neutral-800 flex flex-col gap-1">
             {message.citations.map((c, i) => (
