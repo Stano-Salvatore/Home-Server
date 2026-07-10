@@ -270,6 +270,27 @@ export function GraphTab() {
     });
   }, []);
 
+  // Re-connect any node to a new parent. Custom nodes persist via their store;
+  // docs/folders persist as a parent override.
+  const setParent = useCallback(async (id: string, parentId: string, kind: string) => {
+    edgesRef.current = edgesRef.current.filter((e) => !(e.b === id && !e.linkId));
+    edgesRef.current.push({ a: parentId || "hub", b: id, len: 120 });
+    kickRef.current();
+    if (kind === "custom") {
+      await fetch("/api/brain/nodes", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id, parentId }),
+      });
+    } else {
+      await fetch("/api/brain/parents", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ nodeId: id, parentId }),
+      });
+    }
+  }, []);
+
   const addLink = useCallback(async (a: string, b: string) => {
     const res = await fetch("/api/brain/links", {
       method: "POST",
@@ -299,13 +320,13 @@ export function GraphTab() {
     if (!selected) return;
     const next = { ...selected, ...patch };
     setSelected(next);
+    if (patch.parentId !== undefined) void setParent(selected.id, patch.parentId, selected.kind);
     if (selected.kind === "custom") {
       const cp: Partial<CustomNode> = {};
       if (patch.label !== undefined) cp.label = patch.label;
       if (patch.color !== undefined) cp.color = patch.color;
       if (patch.emoji !== undefined) cp.emoji = patch.emoji;
-      if (patch.parentId !== undefined) cp.parentId = patch.parentId;
-      void patchCustom(selected.id, cp);
+      if (Object.keys(cp).length) void patchCustom(selected.id, cp);
     } else if (selected.kind === "hub") {
       void patchHub({ label: patch.label, emoji: patch.emoji, color: patch.color });
     } else if (selected.kind === "agent" && patch.color !== undefined) {
@@ -322,13 +343,17 @@ export function GraphTab() {
       fetch("/api/brain/nodes").then((r) => r.json()),
       fetch("/api/brain/links").then((r) => r.json()),
       fetch("/api/brain/hub").then((r) => r.json()),
-    ]).then(([agentsData, docsData, modelsData, customData, linksData, hubData]) => {
+      fetch("/api/brain/parents").then((r) => r.json()),
+    ]).then(([agentsData, docsData, modelsData, customData, linksData, hubData, parentsData]) => {
       if (cancelled) return;
       const agentList: Agent[] = agentsData.agents ?? [];
       const docs: BrainDoc[] = docsData.documents ?? [];
       const custom: CustomNode[] = customData.nodes ?? [];
       const customLinks: CustomLink[] = linksData.links ?? [];
       const hub = hubData.hub ?? { label: "brain", emoji: "🧠", color: "#e06c75" };
+      const overrides: Record<string, string> = parentsData.overrides ?? {};
+      // Honour a user's chosen parent for a doc/folder over the auto-derived one.
+      const parentFor = (id: string, dflt: string) => overrides[id] ?? dflt;
       optionsRef.current = modelsData.options ?? [];
       setAgents(agentList);
       setCustomNodes(custom);
@@ -363,7 +388,7 @@ export function GraphTab() {
 
       for (const a of agentList) {
         place({ id: `agent:${a.id}`, kind: "agent", label: a.name, emoji: a.emoji, color: a.color ?? "#e06c75", r: 20, x: cx + rand(180), y: cy + rand(180), vx: 0, vy: 0, showLabel: true, agent: a });
-        addEdge("hub", `agent:${a.id}`, 140);
+        addEdge(parentFor(`agent:${a.id}`, "hub"), `agent:${a.id}`, 140);
       }
 
       const athena = agentList.find((a) => /scriptoria|athena/i.test(a.modelTag) || /athena/i.test(a.name));
@@ -392,7 +417,7 @@ export function GraphTab() {
         if (!indexDoc) place({ id, kind: "folder", label: segs[segs.length - 1], color: FOLDER_COLOR, r: 9, x: cx + rand(260), y: cy + rand(260), vx: 0, vy: 0 });
         folderId.set(key, id);
         parents.add(id);
-        addEdge(ensureFolder(segs.slice(0, -1)), id, 90);
+        addEdge(parentFor(id, ensureFolder(segs.slice(0, -1))), id, 90);
         return id;
       }
 
@@ -400,14 +425,15 @@ export function GraphTab() {
       vaultDocs.forEach((d, i) => {
         const id = `doc:${d.id}`;
         place({ id, kind: "doc", label: d.title, color: SOURCE_COLOR.obsidian, r: 5, x: cx + rand(320), y: cy + rand(320), vx: 0, vy: 0 });
-        addEdge(ensureFolder(splits[i].slice(cp).slice(0, -1)), id, 55);
+        addEdge(parentFor(id, ensureFolder(splits[i].slice(cp).slice(0, -1))), id, 55);
       });
 
       for (const d of docs) {
         const id = `doc:${d.id}`;
         if (vaultIds.has(id)) continue;
         place({ id, kind: "doc", label: d.title, color: SOURCE_COLOR[d.sourceType] ?? "#8a8d96", r: 5, x: cx + rand(300), y: cy + rand(300), vx: 0, vy: 0 });
-        const parent = d.sourceType === "library" && athena ? `agent:${athena.id}` : "hub";
+        const dflt = d.sourceType === "library" && athena ? `agent:${athena.id}` : "hub";
+        const parent = parentFor(id, dflt);
         addEdge(parent, id, parent === "hub" ? 110 : 70);
       }
 
@@ -805,7 +831,7 @@ export function GraphTab() {
             <input type="color" value={selected.color} onChange={(e) => applyEdit({ color: e.target.value })} className="w-6 h-6 rounded bg-transparent border-0 p-0" />
           </div>
 
-          {selected.kind === "custom" && (
+          {selected.kind !== "hub" && (
             <div className="flex items-center justify-between gap-2">
               <label className="flex items-center gap-2 text-xs text-ink-dim">
                 Connects to
@@ -821,9 +847,11 @@ export function GraphTab() {
                     ))}
                 </select>
               </label>
-              <button onClick={() => removeCustom(selected.id)} className="flex items-center gap-1 text-xs text-ink-dim hover:text-accent">
-                <Trash2 size={13} /> delete
-              </button>
+              {selected.kind === "custom" && (
+                <button onClick={() => removeCustom(selected.id)} className="flex items-center gap-1 text-xs text-ink-dim hover:text-accent">
+                  <Trash2 size={13} /> delete
+                </button>
+              )}
             </div>
           )}
 
