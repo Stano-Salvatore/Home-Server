@@ -38,6 +38,8 @@ export default function SettingsPage() {
   const [status, setStatus] = useState<Status | null>(null);
   const [saving, setSaving] = useState(false);
   const [savedAt, setSavedAt] = useState<number | null>(null);
+  const [reindexing, setReindexing] = useState(false);
+  const [reindexMsg, setReindexMsg] = useState<string | null>(null);
 
   useEffect(() => {
     fetch("/api/settings")
@@ -63,6 +65,24 @@ export default function SettingsPage() {
       setSavedAt(Date.now());
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function reindexBrain() {
+    setReindexing(true);
+    setReindexMsg("Reindexing… re-embedding every note with the current model. This can take a while.");
+    try {
+      const res = await fetch("/api/brain/reindex", { method: "POST" });
+      const d = await res.json();
+      if (d.error) {
+        setReindexMsg(d.error);
+      } else {
+        setReindexMsg(`Reindexed ${d.chunks} chunks across ${d.documents} documents.`);
+      }
+    } catch (err) {
+      setReindexMsg(err instanceof Error ? err.message : String(err));
+    } finally {
+      setReindexing(false);
     }
   }
 
@@ -117,6 +137,16 @@ export default function SettingsPage() {
                 placeholder={hint}
               />
               <p className="text-xs text-neutral-600 mt-1">{hint}</p>
+              {key === "embeddingModel" && (
+                <div className="flex items-center gap-3 mt-2">
+                  <Button variant="secondary" onClick={reindexBrain} disabled={reindexing}>
+                    {reindexing ? "Reindexing…" : "Reindex Brain (re-embed everything)"}
+                  </Button>
+                </div>
+              )}
+              {key === "embeddingModel" && reindexMsg && (
+                <p className="text-xs text-ink-dim mt-1">{reindexMsg}</p>
+              )}
             </div>
           );
         })}

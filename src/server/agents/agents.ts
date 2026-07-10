@@ -5,12 +5,17 @@ export type Agent = {
   id: string;
   name: string;
   emoji: string;
-  modelTag: string; // Ollama tag, e.g. "scriptoria:latest" — resolved to a node at launch
+  modelTag: string; // Ollama tag, e.g. "athena:latest" — resolved to a node at launch
   systemPrompt?: string;
   description?: string;
   wikiDefault?: boolean; // start conversations with Wikipedia grounding on
   color?: string; // node ring color in the Brain graph
   scopeId?: string | null; // Brain scope this agent is limited to (a custom-node id)
+  // Lightweight context bridge: a GET endpoint this agent's replies pull live
+  // data from (e.g. a health-tracking API), injected as system context each
+  // turn. This is a one-shot HTTP fetch, not a full MCP tool-calling client.
+  contextUrl?: string | null;
+  contextToken?: string | null; // sent as `Authorization: Bearer <token>`
 };
 
 const AGENTS_KEY = "agents";
@@ -30,7 +35,9 @@ const PERSONA_SEEDS: {
   color: string;
 }[] = [
   {
-    keyword: "scriptoria",
+    // The persona Modelfile was renamed scriptoria -> athena; match the
+    // current tag first so fresh installs seed straight onto it.
+    keyword: "athena",
     name: "Athena",
     emoji: "🦉",
     description: "Local book & knowledge base",
@@ -109,6 +116,26 @@ export function migrateAgentColors() {
   setSetting("agents_color_v1", "1");
 }
 
+/** One-time: the Athena persona's Modelfile was rebuilt/renamed from
+ *  scriptoria -> athena. Move any agent still pointed at the old tag onto
+ *  the new one once it's actually installed — retries on every call until
+ *  athena:* shows up, so it self-heals as soon as the model is pulled. */
+export function migrateAthenaModelTag(installedTags: string[]) {
+  if (getSetting("agents_athena_tag_v1")) return;
+  const agents = listAgents();
+  const target = agents.find((a) => a.name === "Athena" && /scriptoria/i.test(a.modelTag));
+  if (!target) {
+    setSetting("agents_athena_tag_v1", "1");
+    return;
+  }
+  const athenaTag = installedTags.find((t) => t.toLowerCase().startsWith("athena"));
+  if (athenaTag) {
+    target.modelTag = athenaTag;
+    saveAgents(agents);
+    setSetting("agents_athena_tag_v1", "1");
+  }
+}
+
 export function listAgents(): Agent[] {
   const raw = getSetting(AGENTS_KEY);
   if (raw) {
@@ -128,6 +155,19 @@ function saveAgents(agents: Agent[]) {
 
 export function getAgent(id: string): Agent | undefined {
   return listAgents().find((a) => a.id === id);
+}
+
+function normTag(s: string): string {
+  return (s.split("::").pop() ?? s).replace(/:latest$/, "").toLowerCase();
+}
+
+/** Best-effort reverse lookup: which agent (if any) launched this
+ *  conversation. Conversations only store the resolved model target, not an
+ *  agentId, so this matches the same way the UI resolves an agent to a live
+ *  model option (see lib/agentModel.ts). */
+export function findAgentByModelId(modelId: string): Agent | undefined {
+  const want = normTag(modelId);
+  return listAgents().find((a) => normTag(a.modelTag) === want);
 }
 
 export function addAgent(input: Omit<Agent, "id">): Agent {

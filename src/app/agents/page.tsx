@@ -17,6 +17,8 @@ type Agent = {
   description?: string;
   wikiDefault?: boolean;
   scopeId?: string | null;
+  contextUrl?: string | null;
+  contextToken?: string | null;
 };
 type Scope = { id: string; label: string; emoji?: string };
 
@@ -186,6 +188,8 @@ function AgentForm({
   const [wikiDefault, setWikiDefault] = useState(agent?.wikiDefault ?? false);
   const [scopeId, setScopeId] = useState<string>(agent?.scopeId ?? "");
   const [scopes, setScopes] = useState<Scope[]>([]);
+  const [contextUrl, setContextUrl] = useState(agent?.contextUrl ?? "");
+  const [contextToken, setContextToken] = useState(agent?.contextToken ?? "");
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
@@ -200,7 +204,18 @@ function AgentForm({
   async function save() {
     if (!name.trim() || !modelTag) return;
     setSaving(true);
-    const body = { id: agent?.id, name, emoji, modelTag, description, systemPrompt, wikiDefault, scopeId: scopeId || null };
+    const body = {
+      id: agent?.id,
+      name,
+      emoji,
+      modelTag,
+      description,
+      systemPrompt,
+      wikiDefault,
+      scopeId: scopeId || null,
+      contextUrl: contextUrl.trim() || null,
+      contextToken: contextToken.trim() || null,
+    };
     await fetch("/api/agents", {
       method: agent ? "PUT" : "POST",
       headers: { "Content-Type": "application/json" },
@@ -281,6 +296,26 @@ function AgentForm({
             </select>
           </label>
         )}
+        <div className="border-t border-[var(--border)] pt-2 mt-1 flex flex-col gap-2">
+          <label className="text-xs text-ink-dim">
+            Context bridge (optional) — a GET endpoint this agent fetches live data from every
+            reply (e.g. a health API). Not a full MCP client, just a one-shot fetch injected as
+            context.
+          </label>
+          <input
+            className="rounded bg-[var(--surface-2)] border border-[var(--border)] px-3 py-1.5 text-sm text-ink focus:outline-none focus:border-accent"
+            placeholder="https://your-api.vercel.app/health/summary"
+            value={contextUrl}
+            onChange={(e) => setContextUrl(e.target.value)}
+          />
+          <input
+            className="rounded bg-[var(--surface-2)] border border-[var(--border)] px-3 py-1.5 text-sm text-ink focus:outline-none focus:border-accent"
+            placeholder="Bearer token (optional)"
+            type="password"
+            value={contextToken}
+            onChange={(e) => setContextToken(e.target.value)}
+          />
+        </div>
         <div className="flex gap-2">
           <Button onClick={save} disabled={saving || !name.trim() || !modelTag}>
             {saving ? "saving…" : agent ? "save" : "create agent"}

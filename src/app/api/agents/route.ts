@@ -8,8 +8,10 @@ import {
   migrateAgentEmojis,
   migrateAgentWikiDefault,
   migrateAgentColors,
+  migrateAthenaModelTag,
 } from "@/server/agents/agents";
 import { probeNodes } from "@/server/backends/registry";
+import { getSetting } from "@/server/settings/config";
 
 export const runtime = "nodejs";
 
@@ -17,18 +19,23 @@ export async function GET() {
   migrateAgentEmojis();
   migrateAgentWikiDefault();
   migrateAgentColors();
+
   let agents = listAgents();
-  if (agents.length === 0) {
-    // First run: seed persona agents from whatever models are on the nodes.
+  const athenaTagMigrated = !!getSetting("agents_athena_tag_v1");
+  if (agents.length === 0 || !athenaTagMigrated) {
+    // First run (seed persona agents), or the athena:scriptoria tag swap is
+    // still pending — both need a fresh read of what's actually installed.
     const nodes = await probeNodes();
     const installed = [...new Set(nodes.flatMap((n) => n.installed))];
-    agents = seedAgentsFromTags(installed);
+    migrateAthenaModelTag(installed);
+    agents = agents.length === 0 ? seedAgentsFromTags(installed) : listAgents();
   }
   return NextResponse.json({ agents });
 }
 
 export async function POST(req: NextRequest) {
-  const { name, emoji, modelTag, systemPrompt, description, wikiDefault, scopeId } = await req.json();
+  const { name, emoji, modelTag, systemPrompt, description, wikiDefault, scopeId, contextUrl, contextToken } =
+    await req.json();
   if (!name || !modelTag) {
     return NextResponse.json({ error: "name and modelTag are required" }, { status: 400 });
   }
@@ -40,6 +47,8 @@ export async function POST(req: NextRequest) {
     description,
     wikiDefault: !!wikiDefault,
     scopeId: scopeId || null,
+    contextUrl: contextUrl || null,
+    contextToken: contextToken || null,
   });
   return NextResponse.json({ agent });
 }

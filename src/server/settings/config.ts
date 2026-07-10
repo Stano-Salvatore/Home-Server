@@ -11,7 +11,9 @@ const AppConfigSchema = z.object({
   uploadsPath: z.string().default(path.join(process.cwd(), "data", "uploads")),
   llamaCppBinPath: z.string().default("llama-server"),
   ollamaHost: z.string().default("http://127.0.0.1:11434"),
-  embeddingModel: z.string().default("nomic-embed-text"),
+  // bge-m3 is multilingual (EN/CS/SK and more) and embeds Czech notes far
+  // better than the English-centric nomic-embed-text default used to.
+  embeddingModel: z.string().default("bge-m3"),
   // Where embeddings run. Blank = the default chat node. Set this to a separate
   // Ollama (e.g. the dashboard phone's own localhost) to keep the embedding
   // model off the compute node so it doesn't fight the chat model for RAM.
@@ -89,6 +91,23 @@ export function updateSettings(patch: Partial<AppConfig>): AppConfig {
     if (value !== undefined) setSetting(key, String(value));
   }
   return loadSettings(true);
+}
+
+const EMBEDDING_MIGRATION_KEY = "embedding_model_bge_m3_v1";
+
+/** One-time: move installs still on the old nomic-embed-text default onto the
+ *  multilingual bge-m3 model, which embeds Czech/Slovak notes far better.
+ *  Leaves installs alone where the user already picked something else. Only
+ *  flips the setting — existing chunks still need a Brain reindex to actually
+ *  get re-embedded, since old vectors stay valid until then. */
+export function migrateEmbeddingDefault() {
+  if (getRaw(EMBEDDING_MIGRATION_KEY)) return;
+  const current = getRaw("embeddingModel");
+  if (current === undefined || current === "nomic-embed-text") {
+    setSetting("embeddingModel", "bge-m3");
+    cachedConfig = null;
+  }
+  setSetting(EMBEDDING_MIGRATION_KEY, "1");
 }
 
 export function pathStatus(p: string): { exists: boolean; writable: boolean } {

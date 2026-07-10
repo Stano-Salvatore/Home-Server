@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import { runMigrations } from "@/server/db/client";
-import { loadSettings } from "@/server/settings/config";
+import { loadSettings, migrateEmbeddingDefault } from "@/server/settings/config";
 
 let bootstrapped = false;
 
@@ -9,6 +9,7 @@ export async function bootstrap() {
   bootstrapped = true;
 
   runMigrations();
+  migrateEmbeddingDefault();
   const config = loadSettings();
 
   fs.mkdirSync(config.uploadsPath, { recursive: true });

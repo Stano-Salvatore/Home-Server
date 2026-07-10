@@ -229,6 +229,24 @@ async function* streamAssistant(
       });
     }
   }
+
+  // If this conversation was launched as a persona agent that has a context
+  // bridge configured (e.g. Emergi -> a health API), pull it in live.
+  const { findAgentByModelId } = await import("@/server/agents/agents");
+  const agent = findAgentByModelId(conversation.modelId);
+  if (agent?.contextUrl) {
+    const { fetchAgentContext } = await import("@/server/agents/contextBridge");
+    const agentContext = await fetchAgentContext(agent);
+    if (agentContext) {
+      chatMessages.push({
+        role: "system",
+        content:
+          `Live data from ${agent.name}'s connected source, fetched just now — treat it as ` +
+          `current ground truth for this reply:\n\n${agentContext}`,
+      });
+    }
+  }
+
   const citations: Citation[] | undefined = citationList.length > 0 ? citationList : undefined;
 
   for (const m of history) {

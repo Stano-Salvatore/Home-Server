@@ -122,6 +122,20 @@ export async function loadVectorIndex() {
   memLoad();
 }
 
+// Clears every vector from the index without touching the SQLite rows —
+// used by a full reindex, which re-embeds each chunk's stored text and
+// re-adds it right after.
+export async function resetVectorIndex() {
+  const q = qdrant();
+  if (q) {
+    await q.reset();
+    return;
+  }
+  const s = memState();
+  s.chunks = [];
+  s.loaded = true;
+}
+
 export async function addToIndex(points: IndexedPoint[], meta: ChunkMeta) {
   const q = qdrant();
   if (q) {

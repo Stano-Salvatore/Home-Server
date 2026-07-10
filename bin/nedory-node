@@ -1,22 +1,42 @@
 #!/usr/bin/env bash
 # Nedory (node) — boot the AI services on a compute phone like the S21:
-# Ollama (bound to the network) + Kiwix (offline Wikipedia) if any .zim exist.
+# Ollama (bound to the network, tuned for speed, self-restarting) + Kiwix
+# (offline Wikipedia) if any .zim exist.
 #
 # Install once on that device:
-#   printf '%s' "$(cat nedory-node)" > "$PREFIX/bin/nedory" && chmod +x "$PREFIX/bin/nedory"
-# then just run:  nedory
+#   printf '%s' "$(cat nedory-node)" > "$PREFIX/bin/nedory-node" && chmod +x "$PREFIX/bin/nedory-node"
+# then just run:  nedory-node
 
 # Keep Termux awake so Android doesn't kill the servers.
 command -v termux-wake-lock >/dev/null 2>&1 && termux-wake-lock || true
 
-# Ollama, reachable across the network (Tailscale / LAN), not just localhost.
-# OLLAMA_KEEP_ALIVE=30m keeps the model resident in RAM instead of unloading
-# after 5 min idle — that reload is what makes the first message feel slow on a phone.
-if ! pgrep -f "ollama serve" >/dev/null 2>&1; then
-  OLLAMA_HOST=0.0.0.0:11434 OLLAMA_KEEP_ALIVE=30m nohup ollama serve >"$HOME/ollama.log" 2>&1 &
-  echo "◢ ollama serving on 0.0.0.0:11434 (models kept warm 30m)"
+WATCHDOG_PID_FILE="$HOME/.ollama-watchdog.pid"
+
+# Ollama, reachable across the network (Tailscale / LAN), tuned for speed:
+# flash attention + an 8-bit KV cache roughly halve the RAM the context window
+# needs, and OLLAMA_KEEP_ALIVE keeps the model resident instead of unloading
+# after 5 min idle — that reload is what makes the first message feel slow on
+# a phone. A watchdog loop restarts Ollama if it ever crashes or gets killed
+# by Android's battery optimizer.
+if [ -f "$WATCHDOG_PID_FILE" ] && kill -0 "$(cat "$WATCHDOG_PID_FILE")" 2>/dev/null; then
+  echo "◢ ollama watchdog already running"
 else
-  echo "◢ ollama already running"
+  # Clear out any unmanaged "ollama serve" (e.g. started by hand before the
+  # watchdog existed) so binding 0.0.0.0:11434 doesn't fail with "address
+  # already in use".
+  pkill -f "ollama serve" 2>/dev/null || true
+  sleep 1
+  nohup env \
+    OLLAMA_HOST=0.0.0.0:11434 \
+    OLLAMA_ORIGINS="*" \
+    OLLAMA_KEEP_ALIVE=30m \
+    OLLAMA_FLASH_ATTENTION=1 \
+    OLLAMA_KV_CACHE_TYPE=q8_0 \
+    bash -c 'while true; do ollama serve; echo "[$(date)] ollama serve exited, restarting in 5s"; sleep 5; done' \
+    >>"$HOME/ollama.log" 2>&1 &
+  echo $! > "$WATCHDOG_PID_FILE"
+  disown
+  echo "◢ ollama serving on 0.0.0.0:11434 (flash-attn, q8_0 kv cache, warm 30m, auto-restart on)"
 fi
 
 # Kiwix, only if you've downloaded ZIM files into ~/zim.

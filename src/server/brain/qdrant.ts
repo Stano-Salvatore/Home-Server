@@ -105,6 +105,14 @@ export class QdrantBackend {
     // lazily on first write/search.
   }
 
+  // Drop the collection so it gets recreated at the new embedding model's
+  // dimensionality — switching embedding models usually changes vector size,
+  // and Qdrant can't upsert a mismatched dimension into an existing collection.
+  async reset() {
+    await this.req("DELETE", `/collections/${this.collection}`).catch(() => {});
+    this.ensured = false;
+  }
+
   async upsert(points: IndexedPoint[], meta: ChunkMeta) {
     if (points.length === 0) return;
     await this.ensure(points[0].embedding.length);
