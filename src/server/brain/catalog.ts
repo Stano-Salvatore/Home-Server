@@ -12,15 +12,30 @@ export function isCatalogQuery(query: string): boolean {
   return CATALOG_TRIGGER.test(query);
 }
 
-// A loose proper-noun heuristic (a run of capitalized words, diacritics
-// included) — good enough to pull "Egon Bondy" out of "list all books by
-// Egon Bondy" without a real NER model.
+// Filler words between the trigger phrase and the actual name ("books BY
+// bondy", "notes ABOUT egon bondy") — stripped repeatedly so casing never
+// matters. SQLite's LIKE is already ASCII case-insensitive by default, so
+// "bondy" / "Bondy" / "BONDY" all match the same title either way; this only
+// has to find where the name starts, not normalize its case.
+const CONNECTOR_WORDS = /^\s*(books?|notes?|pages?|by|about|on|of|regarding|related to|concerning|for)\s+/i;
+
 export function extractCatalogKeyword(query: string): string | null {
-  const stripped = query.replace(CATALOG_TRIGGER, " ");
-  const match = stripped.match(
+  let stripped = query.replace(CATALOG_TRIGGER, " ").trim();
+  let prev: string;
+  do {
+    prev = stripped;
+    stripped = stripped.replace(CONNECTOR_WORDS, "").trim();
+  } while (stripped !== prev && stripped.length > 0);
+  if (!stripped) return null;
+
+  // Prefer a capitalized proper-noun run when present — more precise than
+  // grabbing everything left over. Falls back to whatever text remains
+  // (any case) once filler words are stripped, e.g. "bondy" with no capital.
+  const properNoun = stripped.match(
     /\b([A-ZÁČĎÉĚÍŇÓŘŠŤÚŮÝŽ][\wá-žÁ-Ž'-]*(?:\s+[A-ZÁČĎÉĚÍŇÓŘŠŤÚŮÝŽ][\wá-žÁ-Ž'-]*){0,2})\b/,
   );
-  return match ? match[1].trim() : null;
+  if (properNoun) return properNoun[1].trim();
+  return stripped.replace(/[?.!]+$/, "").trim() || null;
 }
 
 export type CatalogHit = { documentId: string; title: string; sourcePath: string };
