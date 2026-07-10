@@ -197,7 +197,25 @@ async function* streamAssistant(
       citationList.push(...rag.citations);
       chatMessages.push({
         role: "system",
-        content: `Relevant context from the user's notes/library (cite as [n] when used):\n\n${rag.block}`,
+        content:
+          "You DO have access to the user's own notes and library. The passages below were " +
+          "retrieved from the user's personal Obsidian vault and book collection for THIS question. " +
+          "Treat them as the user's own data that they have shared with you. Answer directly and " +
+          "specifically from them, and cite as [n] when you use a passage. " +
+          "NEVER reply that you are an AI who cannot access personal files, book collections, or " +
+          "private information — that is false here, because the user has given you these passages.\n\n" +
+          rag.block,
+      });
+    } else {
+      // RAG was on but nothing matched. Tell the model to say so honestly rather
+      // than fall back to a canned "I can't access your files" refusal.
+      chatMessages.push({
+        role: "system",
+        content:
+          "The user has RAG enabled, but no passages in their notes/library matched this question. " +
+          "Say plainly that you did not find any matching notes on this topic, and offer to help " +
+          "another way. Do NOT claim you are unable to access the user's personal data or files, and " +
+          "do NOT invent titles, authors, or facts that were not retrieved.",
       });
     }
   }
