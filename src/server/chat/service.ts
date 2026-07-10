@@ -192,31 +192,68 @@ async function* streamAssistant(
       const { getScopeMembers } = await import("@/server/brain/scopes");
       scopeDocIds = getScopeMembers(conversation.scopeId);
     }
-    const rag = await getRagContext(userContent, conversation.projectId, scopeDocIds);
-    if (rag) {
-      citationList.push(...rag.citations);
-      chatMessages.push({
-        role: "system",
-        content:
-          "You DO have access to the user's own notes and library. The passages below were " +
-          "retrieved from the user's personal Obsidian vault and book collection for THIS question. " +
-          "Treat them as the user's own data that they have shared with you. Answer directly and " +
-          "specifically from them, and cite as [n] when you use a passage. " +
-          "NEVER reply that you are an AI who cannot access personal files, book collections, or " +
-          "private information — that is false here, because the user has given you these passages.\n\n" +
-          rag.block,
-      });
+
+    // Enumeration questions ("list all my notes about X", "every book by X")
+    // need an exhaustive keyword match, not top-K cosine similarity — the
+    // latter finds the closest few, not all of them, and silently drops the
+    // rest. Route those to the catalog path instead of semantic RAG.
+    const { isCatalogQuery, extractCatalogKeyword, catalogSearch } = await import("@/server/brain/catalog");
+    const catalogKeyword = isCatalogQuery(userContent) ? extractCatalogKeyword(userContent) : null;
+
+    if (catalogKeyword) {
+      const catalogHits = catalogSearch(catalogKeyword, conversation.projectId, scopeDocIds);
+      if (catalogHits.length > 0) {
+        citationList.push(
+          ...catalogHits.map((h) => ({
+            documentId: h.documentId,
+            title: h.title,
+            sourcePath: h.sourcePath,
+            snippet: h.sourcePath,
+          })),
+        );
+        chatMessages.push({
+          role: "system",
+          content:
+            `This is the COMPLETE, exhaustive list of everything in the user's notes/library matching ` +
+            `"${catalogKeyword}" — not a sample, all ${catalogHits.length} of them. Enumerate every one ` +
+            `in your answer; do not omit any, and do not add titles that aren't in this list:\n\n` +
+            catalogHits.map((h, i) => `${i + 1}. ${h.title} (${h.sourcePath})`).join("\n"),
+        });
+      } else {
+        chatMessages.push({
+          role: "system",
+          content:
+            `The user asked for a complete list matching "${catalogKeyword}", but nothing in their ` +
+            `notes/library matched. Say so plainly — do not invent titles, authors, or facts.`,
+        });
+      }
     } else {
-      // RAG was on but nothing matched. Tell the model to say so honestly rather
-      // than fall back to a canned "I can't access your files" refusal.
-      chatMessages.push({
-        role: "system",
-        content:
-          "The user has RAG enabled, but no passages in their notes/library matched this question. " +
-          "Say plainly that you did not find any matching notes on this topic, and offer to help " +
-          "another way. Do NOT claim you are unable to access the user's personal data or files, and " +
-          "do NOT invent titles, authors, or facts that were not retrieved.",
-      });
+      const rag = await getRagContext(userContent, conversation.projectId, scopeDocIds);
+      if (rag) {
+        citationList.push(...rag.citations);
+        chatMessages.push({
+          role: "system",
+          content:
+            "You DO have access to the user's own notes and library. The passages below were " +
+            "retrieved from the user's personal Obsidian vault and book collection for THIS question. " +
+            "Treat them as the user's own data that they have shared with you. Answer directly and " +
+            "specifically from them, and cite as [n] when you use a passage. " +
+            "NEVER reply that you are an AI who cannot access personal files, book collections, or " +
+            "private information — that is false here, because the user has given you these passages.\n\n" +
+            rag.block,
+        });
+      } else {
+        // RAG was on but nothing matched. Tell the model to say so honestly rather
+        // than fall back to a canned "I can't access your files" refusal.
+        chatMessages.push({
+          role: "system",
+          content:
+            "The user has RAG enabled, but no passages in their notes/library matched this question. " +
+            "Say plainly that you did not find any matching notes on this topic, and offer to help " +
+            "another way. Do NOT claim you are unable to access the user's personal data or files, and " +
+            "do NOT invent titles, authors, or facts that were not retrieved.",
+        });
+      }
     }
   }
   if (conversation.wikiEnabled) {

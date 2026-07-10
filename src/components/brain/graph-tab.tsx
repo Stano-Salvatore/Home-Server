@@ -428,11 +428,25 @@ export function GraphTab() {
         addEdge(parentFor(id, ensureFolder(splits[i].slice(cp).slice(0, -1))), id, 55);
       });
 
+      // Library books whose title matches an existing author/book folder
+      // (from the Obsidian hierarchy above) default into that same branch
+      // instead of dangling off Athena — so "the note about Bondy's book"
+      // and "the actual epub of that book" end up in one place.
+      function findAuthorFolder(title: string): string | undefined {
+        const lower = title.toLowerCase();
+        for (const [key, folderNodeId] of folderId) {
+          const leaf = key.split("/").pop() ?? key;
+          if (leaf.length > 2 && lower.includes(leaf.toLowerCase())) return folderNodeId;
+        }
+        return undefined;
+      }
+
       for (const d of docs) {
         const id = `doc:${d.id}`;
         if (vaultIds.has(id)) continue;
         place({ id, kind: "doc", label: d.title, color: SOURCE_COLOR[d.sourceType] ?? "#8a8d96", r: 5, x: cx + rand(300), y: cy + rand(300), vx: 0, vy: 0 });
-        const dflt = d.sourceType === "library" && athena ? `agent:${athena.id}` : "hub";
+        const matchedFolder = d.sourceType === "library" ? findAuthorFolder(d.title) : undefined;
+        const dflt = matchedFolder ?? (d.sourceType === "library" && athena ? `agent:${athena.id}` : "hub");
         const parent = parentFor(id, dflt);
         addEdge(parent, id, parent === "hub" ? 110 : 70);
       }
