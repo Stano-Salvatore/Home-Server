@@ -16,6 +16,20 @@ SELF="$(readlink -f "$0" 2>/dev/null || echo "$0")"
 ROOT="$(cd "$(dirname "$SELF")/.." && pwd)"
 cd "$ROOT"
 
+# Self-heal: symlink every other bin/ script onto PATH too, so new helper
+# scripts (get-zim, install-vulkan-llama, ...) become bare commands the
+# moment `nedory` is next run after a `git pull` — no separate manual
+# symlink step needed for each one we add later.
+BIN_DIR="${PREFIX:-$HOME/.local}/bin"
+mkdir -p "$BIN_DIR" 2>/dev/null || true
+for script in "$ROOT"/bin/*; do
+  name="$(basename "$script")"
+  [ -x "$script" ] || continue
+  target="$BIN_DIR/$name"
+  [ -L "$target" ] && [ "$(readlink -f "$target" 2>/dev/null)" = "$script" ] && continue
+  ln -sf "$script" "$target" 2>/dev/null || true
+done
+
 # Optional per-device config (S21_SSH, S21_OLLAMA, S21_KIWIX, etc.).
 [ -f "$ROOT/.nedory.env" ] && . "$ROOT/.nedory.env"
 

@@ -43,6 +43,10 @@ chmod +x ~/Home-Server/bin/nedory
 ln -sf ~/Home-Server/bin/nedory "$PREFIX/bin/nedory"   # Termux; elsewhere use ~/.local/bin
 ```
 
+That's the only manual symlink you ever need — every time `nedory` runs, it symlinks
+every other script in `bin/` (`get-zim`, `install-vulkan-llama`, …) onto the same PATH
+too, so new helper scripts just work as bare commands after a `nedory update`.
+
 Then, from anywhere:
 
 ```bash
