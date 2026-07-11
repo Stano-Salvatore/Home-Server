@@ -65,7 +65,12 @@ export function setDocScopes(docId: string, scopeIds: string[]) {
  * with whatever scopes each doc already belongs to. Returns how many matched.
  */
 export function bulkAssignScope(scopeId: string, pathPrefix: string): number {
-  const needle = `%${pathPrefix}%`;
+  // Mobile keyboards love appending a trailing "." on autocorrect/autocap —
+  // a literal period in the LIKE pattern then fails to match "Books/Egon
+  // Bondy/..." (there's no "." there), silently matching zero documents.
+  const cleaned = pathPrefix.trim().replace(/^[.,!?;:]+|[.,!?;:]+$/g, "").trim();
+  if (!cleaned) return 0;
+  const needle = `%${cleaned}%`;
   const rows = db
     .select({ id: brainDocuments.id })
     .from(brainDocuments)
