@@ -40,8 +40,36 @@ export function wasRecentlySelfWritten(absolutePath: string) {
   return selfWrittenMap().has(absolutePath);
 }
 
-function sanitizeFilename(name: string): string {
-  return name.replace(/[/\\?%*:|"<>]/g, "-").trim() || "untitled";
+// opts.filename may be a plain name ("chat-note-123") or include a folder
+// prefix ("Books/Egon Bondy/chat-note-123") — sanitize each path segment on
+// its own so illegal filename characters get stripped without destroying
+// the "/" separators that make the folder placement work. "." and ".."
+// segments are dropped outright (the vaultRoot prefix check below is the
+// real traversal guard, but there's no reason to let them through here).
+function sanitizeRelativePath(name: string): string {
+  const segments = name
+    .split("/")
+    .map((seg) => seg.replace(/[\\?%*:|"<>]/g, "-").trim())
+    .filter((seg) => seg && seg !== "." && seg !== "..");
+  return segments.join("/") || "untitled";
+}
+
+/**
+ * Given a citation's absolute sourcePath, returns the vault-relative folder
+ * it lives in (e.g. "Books/Egon Bondy"), or null if it isn't a real file
+ * inside this vault — a Wikipedia URL, a Library book (indexed from outside
+ * the vault), a flat "manual/..." note, or chat memory all have no folder a
+ * new note should be filed under.
+ */
+export function folderForCitation(sourcePath: string): string | null {
+  if (!sourcePath) return null;
+  const vaultPath = primaryVaultPath();
+  if (!vaultPath) return null;
+  const vaultRoot = path.resolve(vaultPath) + path.sep;
+  const abs = path.resolve(sourcePath);
+  if (!abs.startsWith(vaultRoot)) return null;
+  const rel = path.dirname(abs.slice(vaultRoot.length));
+  return rel === "." ? null : rel;
 }
 
 /**
@@ -57,7 +85,7 @@ export async function writeNote(opts: {
   const vaultPath = primaryVaultPath();
   if (!vaultPath) throw new Error("No Obsidian vault configured");
 
-  const safeName = sanitizeFilename(opts.filename);
+  const safeName = sanitizeRelativePath(opts.filename);
   const relativePath = safeName.endsWith(".md") ? safeName : `${safeName}.md`;
   const absolutePath = path.resolve(vaultPath, relativePath);
 
@@ -77,7 +105,7 @@ export async function writeNote(opts: {
   await ingestDocument({
     sourceType: "obsidian",
     sourcePath: absolutePath,
-    title: safeName.replace(/\.md$/, ""),
+    title: path.basename(safeName, ".md"),
     content: opts.content,
   });
 

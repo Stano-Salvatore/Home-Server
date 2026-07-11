@@ -17,10 +17,11 @@ export function MessageBubble({ message }: { message: ChatUIMessage }) {
     setError(null);
     try {
       const filename = `chat-note-${Date.now()}`;
+      const citationSourcePaths = message.citations?.map((c) => c.sourcePath) ?? [];
       const res = await fetch("/api/obsidian/save-note", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ filename, content: message.content, source: "chat" }),
+        body: JSON.stringify({ filename, content: message.content, source: "chat", citationSourcePaths }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed to save");
