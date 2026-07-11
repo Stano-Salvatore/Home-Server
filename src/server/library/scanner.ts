@@ -2,7 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { eq } from "drizzle-orm";
 import { db } from "@/server/db/client";
-import { libraryBooks } from "@/server/db/schema";
+import { libraryBooks, brainDocuments } from "@/server/db/schema";
 import { loadSettings } from "@/server/settings/config";
 import { sha1, newId } from "@/server/util/hash";
 import { ingestDocument } from "@/server/brain/ingest";
@@ -30,6 +30,30 @@ export function listBooks() {
 
 export function getBook(id: string) {
   return db.select().from(libraryBooks).where(eq(libraryBooks.id, id)).get();
+}
+
+/** Manual rename — kept separate from the auto-extracted metadata a rescan
+ *  would produce. Also renames the linked Brain document so catalog search
+ *  and citations show the same title the user picked. */
+export function updateBook(id: string, patch: { title?: string; author?: string | null }) {
+  const book = getBook(id);
+  if (!book) return undefined;
+
+  const next = {
+    ...(patch.title !== undefined && patch.title.trim() ? { title: patch.title.trim() } : {}),
+    ...(patch.author !== undefined ? { author: patch.author?.trim() || null } : {}),
+  };
+  if (Object.keys(next).length === 0) return book;
+
+  db.update(libraryBooks).set(next).where(eq(libraryBooks.id, id)).run();
+  if (book.brainDocumentId && next.title) {
+    db.update(brainDocuments).set({ title: next.title }).where(eq(brainDocuments.id, book.brainDocumentId)).run();
+  }
+  return getBook(id);
+}
+
+export function setBookCover(id: string, coverPath: string) {
+  db.update(libraryBooks).set({ coverPath }).where(eq(libraryBooks.id, id)).run();
 }
 
 export async function scanLibrary(): Promise<{ scanned: number; added: number; updated: number }> {
