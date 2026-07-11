@@ -94,6 +94,9 @@ export function GraphTab() {
   const [prefs, setPrefs] = useState<GraphPrefs>({ lineWidth: 1, curved: false });
   const prefsRef = useRef<GraphPrefs>({ lineWidth: 1, curved: false });
   const [showLines, setShowLines] = useState(false);
+  const [scopePrefix, setScopePrefix] = useState("");
+  const [scopeBusy, setScopeBusy] = useState(false);
+  const [scopeMsg, setScopeMsg] = useState<string | null>(null);
   const router = useRouter();
 
   useEffect(() => {
@@ -116,6 +119,8 @@ export function GraphTab() {
   useEffect(() => {
     selectedIdRef.current = selected?.id ?? null;
     kickRef.current();
+    setScopePrefix(selected?.label ?? "");
+    setScopeMsg(null);
   }, [selected]);
 
   const graphNode = (id: string) => nodesRef.current.find((n) => n.id === id);
@@ -268,6 +273,29 @@ export function GraphTab() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ id }),
     });
+  }, []);
+
+  // Scope membership has no per-doc UI (checking hundreds of notes one at a
+  // time isn't usable) — this adds every doc whose title/folder path matches
+  // a keyword into the selected scope node in one call.
+  const bulkAssignScope = useCallback(async (scopeId: string, pathPrefix: string) => {
+    if (!pathPrefix.trim()) return;
+    setScopeBusy(true);
+    setScopeMsg(null);
+    try {
+      const res = await fetch("/api/brain/scopes/bulk", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ scopeId, pathPrefix }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed");
+      setScopeMsg(`Added ${data.matched} matching note(s) to this scope.`);
+    } catch (err) {
+      setScopeMsg(err instanceof Error ? err.message : String(err));
+    } finally {
+      setScopeBusy(false);
+    }
   }, []);
 
   // Re-connect any node to a new parent. Custom nodes persist via their store;
@@ -866,6 +894,32 @@ export function GraphTab() {
                   <Trash2 size={13} /> delete
                 </button>
               )}
+            </div>
+          )}
+
+          {selected.kind === "custom" && (
+            <div className="flex flex-col gap-1.5 border-t pt-2" style={{ borderColor: "var(--border)" }}>
+              <span className="text-xs text-ink-dim">
+                Scope membership — no notes are searched when a chat is pinned to this node until
+                you add them here.
+              </span>
+              <div className="flex gap-2">
+                <input
+                  className="flex-1 rounded-md bg-[var(--surface-2)] border border-[var(--border)] px-2 py-1 text-xs text-ink focus:outline-none focus:border-accent"
+                  value={scopePrefix}
+                  onChange={(e) => setScopePrefix(e.target.value)}
+                  placeholder="Folder or author name, e.g. Books"
+                />
+                <button
+                  onClick={() => bulkAssignScope(selected.id, scopePrefix)}
+                  disabled={scopeBusy || !scopePrefix.trim()}
+                  className="rounded-md border px-2.5 py-1 text-xs text-ink-dim hover:text-ink whitespace-nowrap"
+                  style={{ borderColor: "var(--border)", background: "var(--surface-2)" }}
+                >
+                  {scopeBusy ? "adding…" : "add matches"}
+                </button>
+              </div>
+              {scopeMsg && <span className="text-xs text-ink-dim">{scopeMsg}</span>}
             </div>
           )}
 

@@ -1,4 +1,7 @@
+import { like, or } from "drizzle-orm";
 import { getSetting, setSetting } from "@/server/settings/config";
+import { db } from "@/server/db/client";
+import { brainDocuments } from "@/server/db/schema";
 
 // A "scope" is a custom Brain node (from customNodes) with a set of member
 // documents. Pinning a conversation/agent to a scope limits retrieval to those
@@ -52,6 +55,30 @@ export function setDocScopes(docId: string, scopeIds: string[]) {
     if (!m[scopeId].includes(docId)) m[scopeId].push(docId);
   }
   save(m);
+}
+
+/**
+ * There is no UI for adding documents to a scope one at a time — for a vault
+ * with hundreds of notes that's unusable. This adds every document whose
+ * title or folder path contains `pathPrefix` (e.g. the scope's own label,
+ * "Books", or a narrower "Egon Bondy") to the scope in one call, merging
+ * with whatever scopes each doc already belongs to. Returns how many matched.
+ */
+export function bulkAssignScope(scopeId: string, pathPrefix: string): number {
+  const needle = `%${pathPrefix}%`;
+  const rows = db
+    .select({ id: brainDocuments.id })
+    .from(brainDocuments)
+    .where(or(like(brainDocuments.title, needle), like(brainDocuments.sourcePath, needle)))
+    .all();
+
+  const m = load();
+  if (!m[scopeId]) m[scopeId] = [];
+  const existing = new Set(m[scopeId]);
+  for (const row of rows) existing.add(row.id);
+  m[scopeId] = [...existing];
+  save(m);
+  return rows.length;
 }
 
 /** Drop a scope's membership entirely (called when a scope node is deleted). */
