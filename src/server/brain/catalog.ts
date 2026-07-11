@@ -3,39 +3,45 @@ import { db } from "@/server/db/client";
 import { brainDocuments } from "@/server/db/schema";
 
 // Enumeration-style questions ("list all my notes about X", "every book by
-// X") are catalog queries, not semantic ones — top-K cosine similarity finds
-// the closest few chunks, not all of them, so it silently drops matches.
+// X", "what books by X have I read") are catalog queries, not semantic ones
+// — top-K cosine similarity finds the closest few chunks, not all of them,
+// so it silently drops matches.
 const CATALOG_TRIGGER =
-  /\b(list all|list every|all (of )?my|every (book|note|page)s?|what (books|notes) do i have|show all|complete list)\b/i;
+  /\b(list all|list every|all (of )?my|every (book|note|page)s?|(what|which) (books|notes)|show all|complete list|have i read|did i read)\b/i;
 
 export function isCatalogQuery(query: string): boolean {
   return CATALOG_TRIGGER.test(query);
 }
 
-// Filler words between the trigger phrase and the actual name ("books BY
-// bondy", "notes ABOUT egon bondy") — stripped repeatedly so casing never
-// matters. SQLite's LIKE is already ASCII case-insensitive by default, so
-// "bondy" / "Bondy" / "BONDY" all match the same title either way; this only
-// has to find where the name starts, not normalize its case.
-const CONNECTOR_WORDS = /^\s*(books?|notes?|pages?|by|about|on|of|regarding|related to|concerning|for)\s+/i;
+// Filler words dropped from anywhere in the sentence (not just the leading
+// trigger phrase) — "what books BY egon bondy HAVE I READ" needs "by",
+// "have", "i", "read" all stripped, not just whatever the trigger matched.
+// SQLite's LIKE is already ASCII case-insensitive, so "bondy"/"Bondy"/
+// "BONDY" all match the same title either way; this only has to isolate the
+// name, not normalize its case.
+const STOPWORDS = new Set([
+  "a", "an", "the", "my", "me", "you", "your", "i",
+  "have", "has", "had", "do", "does", "did", "read", "got", "own",
+  "books", "book", "notes", "note", "pages", "page",
+  "by", "about", "on", "of", "regarding", "related", "to", "concerning", "for", "in",
+  "what", "which", "all", "every", "list", "show", "complete",
+]);
 
 export function extractCatalogKeyword(query: string): string | null {
-  let stripped = query.replace(CATALOG_TRIGGER, " ").trim();
-  let prev: string;
-  do {
-    prev = stripped;
-    stripped = stripped.replace(CONNECTOR_WORDS, "").trim();
-  } while (stripped !== prev && stripped.length > 0);
-  if (!stripped) return null;
+  const words = query
+    .replace(/[?.!]+$/, "")
+    .split(/\s+/)
+    .filter((w) => w && !STOPWORDS.has(w.toLowerCase()));
+  if (words.length === 0) return null;
+  const joined = words.join(" ");
 
   // Prefer a capitalized proper-noun run when present — more precise than
-  // grabbing everything left over. Falls back to whatever text remains
-  // (any case) once filler words are stripped, e.g. "bondy" with no capital.
-  const properNoun = stripped.match(
+  // grabbing everything left over. Falls back to whatever remains (any
+  // case) once filler words are stripped, e.g. "bondy" with no capital.
+  const properNoun = joined.match(
     /\b([A-ZÁČĎÉĚÍŇÓŘŠŤÚŮÝŽ][\wá-žÁ-Ž'-]*(?:\s+[A-ZÁČĎÉĚÍŇÓŘŠŤÚŮÝŽ][\wá-žÁ-Ž'-]*){0,2})\b/,
   );
-  if (properNoun) return properNoun[1].trim();
-  return stripped.replace(/[?.!]+$/, "").trim() || null;
+  return (properNoun ? properNoun[1] : joined).trim() || null;
 }
 
 export type CatalogHit = { documentId: string; title: string; sourcePath: string };
