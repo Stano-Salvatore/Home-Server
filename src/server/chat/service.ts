@@ -196,15 +196,24 @@ async function* streamAssistant(
       if (members.length > 0) scopeDocIds = members;
     }
 
-    // Enumeration questions ("list all my notes about X", "every book by X")
-    // need an exhaustive keyword match, not top-K cosine similarity — the
-    // latter finds the closest few, not all of them, and silently drops the
-    // rest. Route those to the catalog path instead of semantic RAG.
-    const { isCatalogQuery, extractCatalogKeyword, catalogSearch } = await import("@/server/brain/catalog");
-    const catalogKeyword = isCatalogQuery(userContent) ? extractCatalogKeyword(userContent) : null;
+    // Enumeration questions ("list all my notes about X", "every book by X",
+    // "list everything you have") need an exhaustive match, not top-K cosine
+    // similarity — the latter finds the closest few, not all of them, and
+    // silently drops the rest. Route those to the catalog path instead of
+    // semantic RAG. A catalog query with no specific author/topic left after
+    // stripping filler words means "list literally everything", not "search
+    // for nothing" — those need different queries (catalogListAll vs
+    // catalogSearch), not the same null-keyword fallback.
+    const { isCatalogQuery, extractCatalogKeyword, catalogSearch, catalogListAll } = await import(
+      "@/server/brain/catalog"
+    );
+    const catalogMode = isCatalogQuery(userContent);
+    const catalogKeyword = catalogMode ? extractCatalogKeyword(userContent) : null;
 
-    if (catalogKeyword) {
-      const catalogHits = catalogSearch(catalogKeyword, conversation.projectId, scopeDocIds);
+    if (catalogMode) {
+      const catalogHits = catalogKeyword
+        ? catalogSearch(catalogKeyword, conversation.projectId, scopeDocIds)
+        : catalogListAll(conversation.projectId, scopeDocIds);
       if (catalogHits.length > 0) {
         citationList.push(
           ...catalogHits.map((h) => ({
@@ -214,20 +223,22 @@ async function* streamAssistant(
             snippet: h.sourcePath,
           })),
         );
+        const scope = catalogKeyword ? `matching "${catalogKeyword}"` : "in the user's entire Brain";
         chatMessages.push({
           role: "system",
           content:
-            `This is the COMPLETE, exhaustive list of everything in the user's notes/library matching ` +
-            `"${catalogKeyword}" — not a sample, all ${catalogHits.length} of them. Enumerate every one ` +
-            `in your answer; do not omit any, and do not add titles that aren't in this list:\n\n` +
+            `This is the COMPLETE, exhaustive list of everything ${scope} — not a sample, all ` +
+            `${catalogHits.length} of them. Enumerate every one in your answer; do not omit any, and do ` +
+            `not add titles that aren't in this list:\n\n` +
             catalogHits.map((h, i) => `${i + 1}. ${h.title} (${h.sourcePath})`).join("\n"),
         });
       } else {
+        const scope = catalogKeyword ? `matching "${catalogKeyword}"` : "at all";
         chatMessages.push({
           role: "system",
           content:
-            `The user asked for a complete list matching "${catalogKeyword}", but nothing in their ` +
-            `notes/library matched. Say so plainly — do not invent titles, authors, or facts.`,
+            `The user asked for a complete list, but nothing in their notes/library matched ${scope}. ` +
+            `Say so plainly — do not invent titles, authors, or facts.`,
         });
       }
     } else {
