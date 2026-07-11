@@ -186,11 +186,14 @@ async function* streamAssistant(
   const citationList: Citation[] = [];
   if (conversation.ragEnabled) {
     // If the conversation is pinned to a scope, resolve its member docs so RAG
-    // only searches those.
+    // only searches those. A scope with zero members isn't a deliberate
+    // "search nothing" request — it just hasn't been populated yet — so fall
+    // back to searching all of Brain instead of silently returning no hits.
     let scopeDocIds: string[] | null = null;
     if (conversation.scopeId) {
       const { getScopeMembers } = await import("@/server/brain/scopes");
-      scopeDocIds = getScopeMembers(conversation.scopeId);
+      const members = getScopeMembers(conversation.scopeId);
+      if (members.length > 0) scopeDocIds = members;
     }
 
     // Enumeration questions ("list all my notes about X", "every book by X")
