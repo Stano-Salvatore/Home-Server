@@ -66,6 +66,25 @@ get-zim wikipedia_cs_all_nopic   # download the newest match (resumable) into ~/
 latest. `nedory` then auto-serves `~/zim/*.zim` on `:8080`; point Settings → Kiwix URL
 at `http://<that-phone-ip>:8080` and set Wikipedia grounding to **Offline**.
 
+### GPU-accelerated inference (Vulkan/Turnip, optional)
+
+Ollama on Android is CPU-only — no GPU/NPU delegate. `llama.cpp` has a real Vulkan
+backend, and Adreno GPUs can run it via **Turnip**, an open-source Mesa driver (the
+official Adreno driver tends to crash on the shaders LLM inference needs, which is
+why Turnip specifically, not just any GPU driver, is what works here).
+
+```bash
+install-vulkan-llama   # on the compute phone, in Termux — builds a Vulkan llama-server
+```
+
+This is a from-source build, best-effort on unverified hardware — driver maturity
+varies a lot by Adreno generation (older 6xx/7xx-family chips have years of Turnip
+support; the newest chips may not yet). Once it's built, point Settings →
+"llama.cpp binary path" at the resulting binary and start a server from Cookbook
+with `-ngl 99` in extra args to offload all layers to the GPU. This is a separate,
+parallel path to Ollama — Nedory already supports both backends, so nothing else
+in the app needs to change.
+
 ## Building for production
 
 ```bash

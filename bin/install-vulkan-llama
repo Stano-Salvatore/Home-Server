@@ -1,0 +1,67 @@
+#!/usr/bin/env bash
+# Build a GPU-accelerated (Vulkan + Turnip) llama.cpp on a Snapdragon compute
+# phone, so Nedory can run models through the phone's Adreno GPU instead of
+# CPU-only Ollama. Run this ON the compute phone (e.g. the S21) in Termux.
+#
+# Why this exists: Ollama's Android build is CPU-only — no GPU/NPU delegate.
+# llama.cpp has a real Vulkan backend, and Android's Adreno GPUs can run it
+# via Turnip, an open-source Mesa driver (the *official* Adreno driver tends
+# to crash on the shaders LLM inference needs, which is why Turnip specifically
+# is the one that works here, not just "install a GPU driver").
+#
+# Tested driver-family confidence: this path is well-trodden on Adreno 6xx/7xx
+# (Snapdragon 870/7-Gen-3-class chips). The S21 Ultra's Adreno 660 is in that
+# same 6xx family, so this SHOULD work — but it isn't a chip anyone has
+# confirmed by name, so treat the first run as an experiment, not a guarantee.
+# If any step below fails, stop and send the exact error back — Termux
+# package names and llama.cpp's build flags both drift over time, and this
+# script can't be tested against real Adreno hardware before you run it.
+set -e
+
+echo "◢ [1/5] Termux build tools + Turnip/Mesa Vulkan driver…"
+pkg update -y
+pkg install -y x11-repo tur-repo
+pkg install -y git cmake clang make golang vulkan-tools mesa-vulkan-icd-freedreno-dri3
+
+export VK_ICD_FILENAMES="$PREFIX/share/vulkan/icd.d/freedreno_icd.aarch64.json"
+if ! grep -q VK_ICD_FILENAMES "$HOME/.bashrc" 2>/dev/null; then
+  echo "export VK_ICD_FILENAMES=$VK_ICD_FILENAMES" >> "$HOME/.bashrc"
+fi
+
+echo "◢ [2/5] Checking Vulkan actually sees the GPU via Turnip…"
+if ! vulkaninfo --summary 2>&1 | tee /tmp/vulkaninfo.log | grep -qi "turnip\|adreno"; then
+  echo "⚠ vulkaninfo didn't clearly report Turnip/Adreno — see /tmp/vulkaninfo.log."
+  echo "  This is the most likely failure point on unverified hardware. Send me"
+  echo "  the contents of /tmp/vulkaninfo.log before continuing."
+fi
+
+echo "◢ [3/5] Cloning llama.cpp…"
+cd "$HOME"
+if [ ! -d llama.cpp ]; then
+  git clone https://github.com/ggml-org/llama.cpp
+fi
+cd llama.cpp
+git pull
+
+echo "◢ [4/5] Building with the Vulkan backend (this takes a while on a phone)…"
+cmake -B build -DGGML_VULKAN=ON -DCMAKE_BUILD_TYPE=Release
+cmake --build build --config Release -j"$(nproc)"
+
+BIN="$HOME/llama.cpp/build/bin/llama-server"
+if [ ! -x "$BIN" ]; then
+  echo "✗ Build finished but $BIN wasn't produced — check the build log above for errors."
+  exit 1
+fi
+
+echo "◢ [5/5] Done. llama-server built at: $BIN"
+echo
+echo "Next steps:"
+echo "  1. Download a GGUF model onto this phone, e.g.:"
+echo "     mkdir -p ~/models && cd ~/models"
+echo "     wget <a .gguf download URL — Hugging Face model card, 'Files' tab>"
+echo "  2. Sanity-check GPU offload directly (watch for a Vulkan device line, not just CPU):"
+echo "     $BIN -m ~/models/<model>.gguf -ngl 99 --port 8081"
+echo "  3. In Nedory: Settings → 'llama.cpp binary path' → $BIN"
+echo "  4. In Cookbook: start a llama.cpp server, model path = your .gguf,"
+echo "     extra args = -ngl 99  (offloads all layers to the GPU)"
+echo "  5. It'll show up as a running model in Chat/Agents like any other."
