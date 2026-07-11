@@ -21,7 +21,14 @@ set -e
 echo "◢ [1/5] Termux build tools + Turnip/Mesa Vulkan driver…"
 pkg update -y
 pkg install -y x11-repo tur-repo
-pkg install -y git cmake clang make golang vulkan-tools mesa-vulkan-icd-freedreno-dri3
+# mesa-vulkan-icd-freedreno-dri3 is the *runtime* driver (Turnip talking to
+# the Adreno GPU) — it doesn't include what cmake needs to *compile* against
+# Vulkan. vulkan-headers gives the C headers, vulkan-loader-android bridges
+# to the device's real libvulkan.so, shaderc provides glslc (the GLSL->SPIR-V
+# compiler llama.cpp's Vulkan shaders need at build time). Missing any of
+# these is exactly what "Could NOT find Vulkan (missing: ... glslc)" means.
+pkg install -y git cmake clang make golang vulkan-tools mesa-vulkan-icd-freedreno-dri3 \
+  vulkan-headers vulkan-loader-android shaderc
 
 export VK_ICD_FILENAMES="$PREFIX/share/vulkan/icd.d/freedreno_icd.aarch64.json"
 if ! grep -q VK_ICD_FILENAMES "$HOME/.bashrc" 2>/dev/null; then
