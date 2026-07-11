@@ -298,6 +298,60 @@ export function GraphTab() {
     }
   }, []);
 
+  // A custom scope node like "Books" is often a purely visual grouping —
+  // author folders get manually connected under it, but its label never
+  // appears in any real file path, so the keyword matcher above finds
+  // nothing. This instead walks the graph's actual hierarchy edges (the
+  // same ones drawn on screen) from the node down and collects every doc
+  // connected under it, whatever the path/title says.
+  const collectDescendantDocIds = useCallback((rootId: string): string[] => {
+    const children = new Map<string, string[]>();
+    for (const e of edgesRef.current) {
+      if (e.linkId) continue; // cross-links, not hierarchy
+      if (!children.has(e.a)) children.set(e.a, []);
+      children.get(e.a)!.push(e.b);
+    }
+    const docIds: string[] = [];
+    const seen = new Set<string>();
+    const stack = [rootId];
+    while (stack.length) {
+      const cur = stack.pop()!;
+      if (seen.has(cur)) continue;
+      seen.add(cur);
+      const node = graphNode(cur);
+      if (node?.kind === "doc") docIds.push(cur.slice(4)); // strip "doc:" prefix
+      for (const child of children.get(cur) ?? []) stack.push(child);
+    }
+    return docIds;
+  }, []);
+
+  const addBranchToScope = useCallback(
+    async (scopeId: string) => {
+      const docIds = collectDescendantDocIds(scopeId);
+      if (docIds.length === 0) {
+        setScopeMsg("No notes are connected under this node in the graph yet.");
+        return;
+      }
+      setScopeBusy(true);
+      setScopeMsg(null);
+      try {
+        const res = await fetch("/api/brain/scopes/bulk-ids", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ scopeId, docIds }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "Failed");
+        setScopeMsg(`Added ${data.added} note(s) connected under this node.`);
+      } catch (err) {
+        setScopeMsg(err instanceof Error ? err.message : String(err));
+      } finally {
+        setScopeBusy(false);
+      }
+    },
+    [collectDescendantDocIds],
+  );
+
   // Re-connect any node to a new parent. Custom nodes persist via their store;
   // docs/folders persist as a parent override.
   const setParent = useCallback(async (id: string, parentId: string, kind: string) => {
@@ -903,12 +957,25 @@ export function GraphTab() {
                 Scope membership — no notes are searched when a chat is pinned to this node until
                 you add them here.
               </span>
+              <button
+                onClick={() => addBranchToScope(selected.id)}
+                disabled={scopeBusy}
+                className="rounded-md border px-2.5 py-1.5 text-xs text-ink-dim hover:text-ink"
+                style={{ borderColor: "var(--border)", background: "var(--surface-2)" }}
+              >
+                {scopeBusy ? "adding…" : "add everything connected to this node"}
+              </button>
+              <div className="flex items-center gap-2 text-xs text-ink-dim">
+                <span className="flex-1 h-px" style={{ background: "var(--border)" }} />
+                or match by keyword
+                <span className="flex-1 h-px" style={{ background: "var(--border)" }} />
+              </div>
               <div className="flex gap-2">
                 <input
                   className="flex-1 rounded-md bg-[var(--surface-2)] border border-[var(--border)] px-2 py-1 text-xs text-ink focus:outline-none focus:border-accent"
                   value={scopePrefix}
                   onChange={(e) => setScopePrefix(e.target.value)}
-                  placeholder="Folder or author name, e.g. Books"
+                  placeholder="Folder or author name, e.g. Bondy"
                 />
                 <button
                   onClick={() => bulkAssignScope(selected.id, scopePrefix)}

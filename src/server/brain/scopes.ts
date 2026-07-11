@@ -86,6 +86,28 @@ export function bulkAssignScope(scopeId: string, pathPrefix: string): number {
   return rows.length;
 }
 
+/**
+ * Same as bulkAssignScope, but takes an explicit set of document ids instead
+ * of guessing from a path/title keyword — used when the caller already knows
+ * exactly which docs belong (e.g. everything connected under a node in the
+ * graph, which may be a purely visual grouping with no matching path text).
+ */
+export function bulkAssignScopeByIds(scopeId: string, docIds: string[]): number {
+  const m = load();
+  if (!m[scopeId]) m[scopeId] = [];
+  const existing = new Set(m[scopeId]);
+  let added = 0;
+  for (const docId of docIds) {
+    if (!existing.has(docId)) {
+      existing.add(docId);
+      added++;
+    }
+  }
+  m[scopeId] = [...existing];
+  save(m);
+  return added;
+}
+
 /** Drop a scope's membership entirely (called when a scope node is deleted). */
 export function removeScope(scopeId: string) {
   const m = load();
