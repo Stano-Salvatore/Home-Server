@@ -61,7 +61,14 @@ cd llama.cpp
 git pull
 
 echo "◢ [4/5] Building with the Vulkan backend (this takes a while on a phone)…"
-cmake -B build -DGGML_VULKAN=ON -DCMAKE_BUILD_TYPE=Release
+# On several Adreno/Termux combos, glslc misreports GL_KHR_cooperative_matrix
+# support: the extension check passes, but the actual shader/pipeline tables
+# for that path aren't valid on the real driver, so ggml-vulkan null-derefs
+# and segfaults the instant a model is loaded (independent of -ngl or -fa —
+# it's a backend-init-time crash, not an inference-time one). This is a known
+# upstream issue (ggml-org/llama.cpp#13801). Disabling coopmat shader
+# generation at build time avoids the bad path entirely.
+cmake -B build -DGGML_VULKAN=ON -DGGML_VULKAN_COOPMAT_GLSLC_SUPPORT=OFF -DCMAKE_BUILD_TYPE=Release
 cmake --build build --config Release -j"$(nproc)"
 
 BIN="$HOME/llama.cpp/build/bin/llama-server"
