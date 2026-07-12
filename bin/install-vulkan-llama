@@ -21,24 +21,30 @@ set -e
 echo "◢ [1/5] Termux build tools + Turnip/Mesa Vulkan driver…"
 pkg update -y
 pkg install -y x11-repo tur-repo
-pkg install -y git cmake clang make golang vulkan-tools mesa-vulkan-icd-freedreno-dri3
 
-# vulkan-loader-generic (a software/llvmpipe-oriented loader, sometimes pulled
-# in as a dependency of the packages above) conflicts with vulkan-loader-android
-# (the one that actually bridges to the device's real libvulkan.so / Turnip) —
-# pkg won't auto-swap one for the other, it just fails the whole install with
-# an unmet-dependency error. We want the real device driver, so drop the
-# generic one first.
-pkg uninstall -y vulkan-loader-generic 2>/dev/null || true
+# Termux renamed this package at some point (was mesa-vulkan-icd-freedreno-dri3);
+# it now pulls in vulkan-loader-generic as a real dependency. That matters: the
+# generic loader is the standalone Khronos Vulkan loader, which is what actually
+# honors VK_ICD_FILENAMES / scans the icd.d directory for a custom driver like
+# Turnip. Do NOT install vulkan-loader-android alongside it — that package just
+# bridges straight to Android's own system driver (the proprietary one, exactly
+# what we're trying to avoid) and silently ignores VK_ICD_FILENAMES entirely, so
+# if it's present Turnip never actually gets used even though everything *looks*
+# installed correctly. (An earlier version of this script installed
+# vulkan-loader-android and explicitly uninstalled vulkan-loader-generic to dodge
+# a package conflict — that "fix" was wrong: it silently defeated the entire
+# point of this script on real hardware. Confirmed via vulkaninfo reporting
+# DRIVER_ID_QUALCOMM_PROPRIETARY no matter what VK_ICD_FILENAMES was set to,
+# until vulkan-loader-android was removed.)
+pkg install -y git cmake clang make golang vulkan-tools mesa-vulkan-icd-freedreno
 
-# vulkan-headers gives cmake the Vulkan C headers, vulkan-loader-android is the
-# real-device loader, shaderc provides glslc (the GLSL->SPIR-V compiler
-# llama.cpp's Vulkan shaders need at build time). Missing any of these is
-# exactly what "Could NOT find Vulkan (missing: ... glslc)" means. Once that
-# clears, cmake goes one layer deeper and wants spirv-headers/spirv-tools
-# directly too (shaderc depends on them internally, but doesn't expose their
-# cmake config files to other packages that ask for them by name).
-pkg install -y vulkan-headers vulkan-loader-android shaderc spirv-headers spirv-tools
+# vulkan-headers gives cmake the Vulkan C headers, shaderc provides glslc (the
+# GLSL->SPIR-V compiler llama.cpp's Vulkan shaders need at build time). Missing
+# either is exactly what "Could NOT find Vulkan (missing: ... glslc)" means.
+# Once that clears, cmake goes one layer deeper and wants spirv-headers/
+# spirv-tools directly too (shaderc depends on them internally, but doesn't
+# expose their cmake config files to other packages that ask for them by name).
+pkg install -y vulkan-headers shaderc spirv-headers spirv-tools
 
 export VK_ICD_FILENAMES="$PREFIX/share/vulkan/icd.d/freedreno_icd.aarch64.json"
 if ! grep -q VK_ICD_FILENAMES "$HOME/.bashrc" 2>/dev/null; then
