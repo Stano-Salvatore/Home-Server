@@ -13,7 +13,7 @@ export function friendlyError(raw: string): string {
     e.includes("timed out") ||
     e.includes("timeout")
   ) {
-    return "Can't reach the model host. Is the S21 (or your Ollama node) awake and on Tailscale? Check the status dot in the sidebar.";
+    return "Can't reach the model host. Is that node awake and reachable (Tailscale/local network)? Check the status dot in the sidebar, and confirm the node's URL under Nodes.";
   }
   if (e.includes("embeddings failed")) {
     return "The embedding model isn't available on the embedding host. Pull it there (e.g. `ollama pull bge-m3`), then try again.";
