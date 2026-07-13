@@ -29,6 +29,13 @@
       "when": 1783623982540,
       "tag": "0003_careless_hiroim",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "6",
+      "when": 1783947117431,
+      "tag": "0004_acoustic_chronomancer",
+      "breakpoints": true
     }
   ]
 }

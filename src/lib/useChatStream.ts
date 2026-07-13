@@ -8,6 +8,8 @@ export type ChatUIMessage = {
   role: "user" | "assistant";
   content: string;
   citations?: { documentId: string; title: string; sourcePath: string; snippet: string }[];
+  durationMs?: number;
+  tokenCount?: number;
 };
 
 export function useChatStream(conversationId: string | null) {
@@ -22,12 +24,23 @@ export function useChatStream(conversationId: string | null) {
     setMessages(
       (data.messages ?? [])
         .filter((m: { role: string }) => m.role !== "system")
-        .map((m: { id: string; role: string; content: string; citationsJson: string | null }) => ({
-          id: m.id,
-          role: m.role as "user" | "assistant",
-          content: m.content,
-          citations: m.citationsJson ? JSON.parse(m.citationsJson) : undefined,
-        })),
+        .map(
+          (m: {
+            id: string;
+            role: string;
+            content: string;
+            citationsJson: string | null;
+            durationMs: number | null;
+            tokenCount: number | null;
+          }) => ({
+            id: m.id,
+            role: m.role as "user" | "assistant",
+            content: m.content,
+            citations: m.citationsJson ? JSON.parse(m.citationsJson) : undefined,
+            durationMs: m.durationMs ?? undefined,
+            tokenCount: m.tokenCount ?? undefined,
+          }),
+        ),
     );
   }, []);
 
@@ -75,6 +88,16 @@ export function useChatStream(conversationId: string | null) {
             setMessages((prev) => {
               const next = [...prev];
               next[next.length - 1] = { ...next[next.length - 1], citations: data.citations };
+              return next;
+            });
+          } else if (data.stats) {
+            setMessages((prev) => {
+              const next = [...prev];
+              next[next.length - 1] = {
+                ...next[next.length - 1],
+                durationMs: data.stats.durationMs,
+                tokenCount: data.stats.tokenCount,
+              };
               return next;
             });
           }

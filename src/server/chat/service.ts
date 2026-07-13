@@ -9,6 +9,16 @@ import { listMemoryFacts } from "@/server/brain/memory";
 const HISTORY_LIMIT = 20;
 
 export type Citation = { documentId: string; title: string; sourcePath: string; snippet: string };
+export type GenStats = { durationMs: number; tokenCount: number };
+
+// Fallback when the backend doesn't report an exact token count (llama.cpp
+// only does when it understands stream_options.include_usage; some Ollama
+// versions omit eval_count on error/cancel). ~4 chars/token is the standard
+// rough estimate for English text — good enough for a felt-sense tok/s, not
+// meant to be exact.
+function estimateTokenCount(text: string): number {
+  return Math.max(1, Math.round(text.length / 4));
+}
 
 export function listConversations() {
   return db.select().from(conversations).orderBy(desc(conversations.updatedAt)).all();
@@ -158,7 +168,7 @@ async function* streamAssistant(
   conversation: Conversation,
   userContent: string,
   signal?: AbortSignal,
-): AsyncGenerator<{ delta?: string; citations?: Citation[] }> {
+): AsyncGenerator<{ delta?: string; citations?: Citation[]; stats?: GenStats }> {
   const conversationId = conversation.id;
   const history = listMessages(conversationId).slice(-HISTORY_LIMIT);
   const chatMessages: ChatMessage[] = [];
@@ -306,13 +316,22 @@ async function* streamAssistant(
 
   const backend = backendFor(conversation.backend as "ollama" | "llamacpp");
   let full = "";
+  let reportedTokenCount: number | undefined;
+  let stats: GenStats | undefined;
+  const startedAt = Date.now();
   try {
     for await (const chunk of backend.chatStream(conversation.modelId, chatMessages, signal)) {
-      full += chunk;
-      yield { delta: chunk };
+      if (chunk.text) {
+        full += chunk.text;
+        yield { delta: chunk.text };
+      }
+      if (chunk.tokenCount !== undefined) reportedTokenCount = chunk.tokenCount;
     }
   } finally {
     if (full) {
+      const durationMs = Date.now() - startedAt;
+      const tokenCount = reportedTokenCount ?? estimateTokenCount(full);
+      stats = { durationMs, tokenCount };
       const assistantId = newId("msg");
       db.insert(messages)
         .values({
@@ -321,6 +340,8 @@ async function* streamAssistant(
           role: "assistant",
           content: full,
           citationsJson: citations ? JSON.stringify(citations) : null,
+          durationMs,
+          tokenCount,
         })
         .run();
       db.update(conversations)
@@ -347,13 +368,14 @@ async function* streamAssistant(
   }
 
   if (citations) yield { citations };
+  if (stats) yield { stats };
 }
 
 export async function* sendMessage(
   conversationId: string,
   userContent: string,
   signal?: AbortSignal,
-): AsyncGenerator<{ delta?: string; citations?: Citation[] }> {
+): AsyncGenerator<{ delta?: string; citations?: Citation[]; stats?: GenStats }> {
   const conversation = getConversation(conversationId);
   if (!conversation) throw new Error("Conversation not found");
 
@@ -371,7 +393,7 @@ export async function* sendMessage(
 export async function* regenerateLast(
   conversationId: string,
   signal?: AbortSignal,
-): AsyncGenerator<{ delta?: string; citations?: Citation[] }> {
+): AsyncGenerator<{ delta?: string; citations?: Citation[]; stats?: GenStats }> {
   const conversation = getConversation(conversationId);
   if (!conversation) throw new Error("Conversation not found");
 

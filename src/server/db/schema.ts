@@ -70,6 +70,11 @@ export const messages = sqliteTable(
     role: text("role").notNull(), // system | user | assistant
     content: text("content").notNull(),
     citationsJson: text("citations_json"),
+    // Assistant replies only: how long generation took and how many tokens
+    // came out, for the tok/s indicator. Null for user/system messages and for
+    // assistant replies from before this column existed.
+    durationMs: integer("duration_ms"),
+    tokenCount: integer("token_count"),
     createdAt: integer("created_at")
       .notNull()
       .default(sql`(unixepoch())`),

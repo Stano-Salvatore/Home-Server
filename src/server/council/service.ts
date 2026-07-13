@@ -50,6 +50,6 @@ export async function* askOneShot(
 
   const backend = backendFor(opts.backend);
   for await (const chunk of backend.chatStream(opts.modelId, messages, signal)) {
-    yield { delta: chunk };
+    if (chunk.text) yield { delta: chunk.text };
   }
 }

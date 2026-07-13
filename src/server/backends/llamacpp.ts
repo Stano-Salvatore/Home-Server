@@ -5,7 +5,7 @@ import { db } from "@/server/db/client";
 import { llamacppServers } from "@/server/db/schema";
 import { loadSettings } from "@/server/settings/config";
 import { newId } from "@/server/util/hash";
-import type { ChatMessage, ModelBackend, RunningModel } from "./types";
+import type { ChatMessage, ChatStreamChunk, ModelBackend, RunningModel } from "./types";
 
 const PORT_RANGE_START = 8081;
 const PORT_RANGE_END = 8199;
@@ -47,6 +47,21 @@ export async function listServers(): Promise<LlamaCppServerRow[]> {
   return db.select().from(llamacppServers).all();
 }
 
+// Parses "KEY=value" pairs (whitespace- or newline-separated) from the
+// llamaCppEnv setting, e.g. VK_ICD_FILENAMES=/path/to/freedreno_icd.json —
+// needed on Android/Termux where the default Vulkan loader silently ignores
+// a GPU-accelerated build and falls back to a driver that crashes on LLM
+// shaders (see bin/install-vulkan-llama).
+function parseEnvOverrides(raw: string): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const tok of raw.split(/\s+/).filter(Boolean)) {
+    const eq = tok.indexOf("=");
+    if (eq <= 0) continue;
+    out[tok.slice(0, eq)] = tok.slice(eq + 1);
+  }
+  return out;
+}
+
 export async function startServer(opts: {
   name: string;
   modelPath: string;
@@ -58,23 +73,32 @@ export async function startServer(opts: {
   const id = newId("llamacpp");
   const extraArgsList = opts.extraArgs ? opts.extraArgs.split(/\s+/).filter(Boolean) : [];
   const args = ["-m", opts.modelPath, "--port", String(port), "--host", "127.0.0.1", ...extraArgsList];
+  const envOverrides = settings.llamaCppEnv ? parseEnvOverrides(settings.llamaCppEnv) : {};
 
   let pid: number | undefined;
   let tmuxSession: string | null = null;
 
   if (opts.useTmux) {
     tmuxSession = `llamacpp-${id}`;
+    const envPrefix = Object.entries(envOverrides)
+      .map(([k, v]) => `${k}='${v.replace(/'/g, "'\\''")}'`)
+      .join(" ");
     const cmd = [settings.llamaCppBinPath, ...args].map((a) => `'${a.replace(/'/g, "'\\''")}'`).join(" ");
     await new Promise<void>((resolve, reject) => {
-      execFile("tmux", ["new-session", "-d", "-s", tmuxSession as string, cmd], (err) => {
-        if (err) reject(err);
-        else resolve();
-      });
+      execFile(
+        "tmux",
+        ["new-session", "-d", "-s", tmuxSession as string, [envPrefix, cmd].filter(Boolean).join(" ")],
+        (err) => {
+          if (err) reject(err);
+          else resolve();
+        },
+      );
     });
   } else {
     const child = spawn(settings.llamaCppBinPath, args, {
       detached: true,
       stdio: "ignore",
+      env: { ...process.env, ...envOverrides },
     });
     child.unref();
     pid = child.pid;
@@ -145,14 +169,16 @@ async function* streamChat(
   target: string,
   messages: ChatMessage[],
   signal?: AbortSignal,
-): AsyncIterable<string> {
+): AsyncIterable<ChatStreamChunk> {
   const server = db.select().from(llamacppServers).where(eq(llamacppServers.id, target)).get();
   if (!server) throw new Error("llama.cpp server not found");
 
   const res = await fetch(`http://127.0.0.1:${server.port}/v1/chat/completions`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ messages, stream: true }),
+    // stream_options.include_usage (OpenAI-compatible) makes llama-server send
+    // one extra final chunk with exact completion_tokens before [DONE].
+    body: JSON.stringify({ messages, stream: true, stream_options: { include_usage: true } }),
     signal,
   });
   if (!res.ok || !res.body) {
@@ -176,7 +202,10 @@ async function* streamChat(
       if (payload === "[DONE]") return;
       const parsed = JSON.parse(payload);
       const delta = parsed.choices?.[0]?.delta?.content;
-      if (delta) yield delta as string;
+      if (delta) yield { text: delta as string };
+      if (typeof parsed.usage?.completion_tokens === "number") {
+        yield { text: "", tokenCount: parsed.usage.completion_tokens };
+      }
     }
   }
 }
@@ -197,7 +226,7 @@ export const llamaCppBackend: ModelBackend = {
   },
   async chatComplete(target, messages) {
     let full = "";
-    for await (const chunk of streamChat(target, messages)) full += chunk;
+    for await (const chunk of streamChat(target, messages)) full += chunk.text;
     return full;
   },
 };

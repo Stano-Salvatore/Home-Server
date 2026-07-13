@@ -6,6 +6,13 @@ import { Markdown } from "./markdown";
 import { ThinkingSpiral } from "@/components/ui/thinking-spiral";
 import { SpeakButton } from "@/components/ui/speak-button";
 
+function formatStats(durationMs: number, tokenCount: number): string {
+  const seconds = durationMs / 1000;
+  const tokPerSec = tokenCount / seconds;
+  const time = seconds < 10 ? `${seconds.toFixed(1)}s` : `${Math.round(seconds)}s`;
+  return `${time} · ${tokPerSec.toFixed(1)} tok/s`;
+}
+
 export function MessageBubble({ message }: { message: ChatUIMessage }) {
   const isUser = message.role === "user";
   const [saved, setSaved] = useState(false);
@@ -68,6 +75,11 @@ export function MessageBubble({ message }: { message: ChatUIMessage }) {
               {saved ? "Saved to Obsidian" : saving ? "Saving…" : "Save to Obsidian"}
             </button>
             <SpeakButton text={message.content} />
+            {message.durationMs !== undefined && message.tokenCount !== undefined && (
+              <span className="text-xs text-neutral-600" title={`${message.tokenCount} tokens`}>
+                {formatStats(message.durationMs, message.tokenCount)}
+              </span>
+            )}
             {error && <span className="text-xs text-red-400">{error}</span>}
           </div>
         )}

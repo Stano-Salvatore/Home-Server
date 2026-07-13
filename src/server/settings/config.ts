@@ -10,6 +10,12 @@ const AppConfigSchema = z.object({
   libraryPath: z.string().default(path.join(process.cwd(), "data", "library")),
   uploadsPath: z.string().default(path.join(process.cwd(), "data", "uploads")),
   llamaCppBinPath: z.string().default("llama-server"),
+  // Set this when llama.cpp was built with a GPU backend that needs an
+  // explicit driver override to actually get used — e.g. Vulkan on Android,
+  // where the system's default loader silently falls back to a proprietary
+  // driver that crashes on LLM shaders unless VK_ICD_FILENAMES points at the
+  // Turnip ICD JSON (see bin/install-vulkan-llama). Blank = don't override.
+  llamaCppEnv: z.string().default(""),
   ollamaHost: z.string().default("http://127.0.0.1:11434"),
   // bge-m3 is multilingual (EN/CS/SK and more) and embeds Czech notes far
   // better than the English-centric nomic-embed-text default used to.
@@ -37,6 +43,7 @@ const ENV_DEFAULTS: Record<keyof AppConfig, string | undefined> = {
   libraryPath: process.env.LIBRARY_PATH,
   uploadsPath: process.env.UPLOADS_PATH,
   llamaCppBinPath: process.env.LLAMACPP_BIN_PATH,
+  llamaCppEnv: process.env.LLAMACPP_ENV,
   ollamaHost: process.env.OLLAMA_HOST,
   embeddingModel: process.env.EMBEDDING_MODEL,
   embeddingHost: process.env.EMBEDDING_HOST,

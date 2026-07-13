@@ -15,9 +15,18 @@ export type PullProgressEvent = {
   done: boolean;
 };
 
+// Most yields carry only `text`. A backend that reports an exact generated
+// token count (Ollama's `eval_count`, llama.cpp's streamed `usage`) attaches
+// `tokenCount` to its final yield so callers don't have to estimate it.
+export type ChatStreamChunk = { text: string; tokenCount?: number };
+
 export interface ModelBackend {
   kind: "ollama" | "llamacpp";
   listRunning(): Promise<RunningModel[]>;
-  chatStream(target: string, messages: ChatMessage[], signal?: AbortSignal): AsyncIterable<string>;
+  chatStream(
+    target: string,
+    messages: ChatMessage[],
+    signal?: AbortSignal,
+  ): AsyncIterable<ChatStreamChunk>;
   chatComplete(target: string, messages: ChatMessage[]): Promise<string>;
 }

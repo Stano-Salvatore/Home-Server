@@ -10,6 +10,7 @@ type Config = {
   libraryPath: string;
   uploadsPath: string;
   llamaCppBinPath: string;
+  llamaCppEnv: string;
   ollamaHost: string;
   embeddingModel: string;
   embeddingHost: string;
@@ -25,6 +26,7 @@ const FIELDS: { key: keyof Config; label: string; hint: string }[] = [
   { key: "libraryPath", label: "Library folder", hint: "Folder with your .epub / .pdf files" },
   { key: "uploadsPath", label: "Uploads folder", hint: "Where uploaded files/photos are stored" },
   { key: "llamaCppBinPath", label: "llama.cpp binary path", hint: "e.g. llama-server or /usr/local/bin/llama-server" },
+  { key: "llamaCppEnv", label: "llama.cpp environment overrides (optional)", hint: "Space-separated KEY=value pairs passed to every launch, e.g. VK_ICD_FILENAMES=/data/data/com.termux/files/usr/share/vulkan/icd.d/freedreno_icd.aarch64.json — needed for Vulkan/Turnip GPU builds on Android, whose default driver silently ignores this and falls back to CPU/a crashing proprietary driver." },
   { key: "ollamaHost", label: "Ollama host", hint: "e.g. http://127.0.0.1:11434" },
   { key: "embeddingModel", label: "Embedding model", hint: "Ollama model used for Brain embeddings (e.g. bge-m3, nomic-embed-text)" },
   { key: "embeddingHost", label: "Embedding host (optional)", hint: "Ollama for embeddings; blank = same as chat node. Set to this phone's own Ollama (e.g. http://127.0.0.1:11434) to keep it off the compute node." },
