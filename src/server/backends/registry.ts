@@ -1,5 +1,6 @@
 import { listLoadedSizes, listInstalledTags, isOllamaReachable, ollamaBackend } from "./ollama";
 import { llamaCppBackend } from "./llamacpp";
+import { litertLmBackend } from "./litertlm";
 import { listNodes, makeOllamaTarget } from "@/server/nodes/nodes";
 import type { ModelBackend, RunningModel } from "./types";
 
@@ -40,11 +41,12 @@ export async function probeNodes(): Promise<NodeStatus[]> {
   );
 }
 
-/** Every selectable model across all nodes, plus running llama.cpp servers. */
+/** Every selectable model across all nodes, plus running llama.cpp/litert-lm servers. */
 export async function listAllModelOptions(): Promise<ModelOption[]> {
-  const [nodeStatuses, llamacppRunning] = await Promise.all([
+  const [nodeStatuses, llamacppRunning, litertlmRunning] = await Promise.all([
     probeNodes(),
     llamaCppBackend.listRunning(),
+    litertLmBackend.listRunning(),
   ]);
 
   const ollamaOptions: ModelOption[] = [];
@@ -63,9 +65,11 @@ export async function listAllModelOptions(): Promise<ModelOption[]> {
     }
   }
 
-  return [...ollamaOptions, ...llamacppRunning];
+  return [...ollamaOptions, ...llamacppRunning, ...litertlmRunning];
 }
 
-export function backendFor(kind: "ollama" | "llamacpp"): ModelBackend {
-  return kind === "ollama" ? ollamaBackend : llamaCppBackend;
+export function backendFor(kind: "ollama" | "llamacpp" | "litertlm"): ModelBackend {
+  if (kind === "ollama") return ollamaBackend;
+  if (kind === "llamacpp") return llamaCppBackend;
+  return litertLmBackend;
 }

@@ -2,7 +2,7 @@ export type ChatMessage = { role: "system" | "user" | "assistant"; content: stri
 
 export type RunningModel = {
   id: string; // backend-specific identifier used to target chat/embed calls
-  backend: "ollama" | "llamacpp";
+  backend: "ollama" | "llamacpp" | "litertlm";
   label: string;
   contextLength?: number;
   port?: number;
@@ -21,7 +21,7 @@ export type PullProgressEvent = {
 export type ChatStreamChunk = { text: string; tokenCount?: number };
 
 export interface ModelBackend {
-  kind: "ollama" | "llamacpp";
+  kind: "ollama" | "llamacpp" | "litertlm";
   listRunning(): Promise<RunningModel[]>;
   chatStream(
     target: string,
