@@ -206,24 +206,38 @@ async function* streamAssistant(
       if (members.length > 0) scopeDocIds = members;
     }
 
-    // Enumeration questions ("list all my notes about X", "every book by X",
-    // "list everything you have") need an exhaustive match, not top-K cosine
-    // similarity — the latter finds the closest few, not all of them, and
-    // silently drops the rest. Route those to the catalog path instead of
-    // semantic RAG. A catalog query with no specific author/topic left after
-    // stripping filler words means "list literally everything", not "search
-    // for nothing" — those need different queries (catalogListAll vs
-    // catalogSearch), not the same null-keyword fallback.
-    const { isCatalogQuery, extractCatalogKeyword, catalogSearch, catalogListAll } = await import(
-      "@/server/brain/catalog"
-    );
-    const catalogMode = isCatalogQuery(userContent);
-    const catalogKeyword = catalogMode ? extractCatalogKeyword(userContent) : null;
+    // Intent detection is planner-driven: enumeration questions ("list all my
+    // notes about X") need an exhaustive catalog match, existence checks ("do
+    // I have anything by X?") need a yes/no over titles, and everything else
+    // is semantic RAG. The planner keeps the old enumeration regex as a
+    // zero-cost fast path and otherwise asks the local litert-lm model, with
+    // a hard timeout that degrades to "answer" mode — so chat never blocks or
+    // breaks when the model is down.
+    const { planQuery } = await import("@/server/brain/planner");
+    const plan = await planQuery(userContent);
 
-    if (catalogMode) {
-      const catalogHits = catalogKeyword
-        ? catalogSearch(catalogKeyword, conversation.projectId, scopeDocIds)
+    // A planner-resolved scope narrows retrieval only when the conversation
+    // has no pinned scope — a user-pinned scope always wins over the plan.
+    if (!scopeDocIds && plan.scopeId) {
+      const { getScopeMembers } = await import("@/server/brain/scopes");
+      const planMembers = getScopeMembers(plan.scopeId);
+      if (planMembers.length > 0) scopeDocIds = planMembers;
+    }
+
+    const { catalogSearch, catalogListAll } = await import("@/server/brain/catalog");
+
+    if (plan.mode === "enumerate") {
+      // A plan with no specific author/topic means "list literally
+      // everything", not "search for nothing" — different queries.
+      let catalogHits = plan.entity
+        ? catalogSearch(plan.entity, conversation.projectId, scopeDocIds)
         : catalogListAll(conversation.projectId, scopeDocIds);
+      // A scope can be a purely visual grouping whose titles/paths don't
+      // contain the entity text (see bulkAssignScopeByIds) — list the
+      // resolved scope's members instead of reporting nothing.
+      if (catalogHits.length === 0 && plan.entity && plan.scopeId && scopeDocIds) {
+        catalogHits = catalogListAll(conversation.projectId, scopeDocIds);
+      }
       if (catalogHits.length > 0) {
         citationList.push(
           ...catalogHits.map((h) => ({
@@ -233,7 +247,7 @@ async function* streamAssistant(
             snippet: h.sourcePath,
           })),
         );
-        const scope = catalogKeyword ? `matching "${catalogKeyword}"` : "in the user's entire Brain";
+        const scope = plan.entity ? `matching "${plan.entity}"` : "in the user's entire Brain";
         chatMessages.push({
           role: "system",
           content:
@@ -243,12 +257,42 @@ async function* streamAssistant(
             catalogHits.map((h, i) => `${i + 1}. ${h.title} (${h.sourcePath})`).join("\n"),
         });
       } else {
-        const scope = catalogKeyword ? `matching "${catalogKeyword}"` : "at all";
+        const scope = plan.entity ? `matching "${plan.entity}"` : "at all";
         chatMessages.push({
           role: "system",
           content:
             `The user asked for a complete list, but nothing in their notes/library matched ${scope}. ` +
             `Say so plainly — do not invent titles, authors, or facts.`,
+        });
+      }
+    } else if (plan.mode === "exists") {
+      const existsHits = plan.entity
+        ? catalogSearch(plan.entity, conversation.projectId, scopeDocIds, 10)
+        : catalogListAll(conversation.projectId, scopeDocIds, 10);
+      if (existsHits.length > 0) {
+        citationList.push(
+          ...existsHits.map((h) => ({
+            documentId: h.documentId,
+            title: h.title,
+            sourcePath: h.sourcePath,
+            snippet: h.sourcePath,
+          })),
+        );
+        chatMessages.push({
+          role: "system",
+          content:
+            `The user asked WHETHER they have notes/books on something. These titles from their ` +
+            `library matched${plan.entity ? ` "${plan.entity}"` : ""}:\n\n` +
+            existsHits.map((h, i) => `${i + 1}. ${h.title} (${h.sourcePath})`).join("\n") +
+            `\n\nAnswer yes/no and name what was found. Do not invent titles that aren't in this list.`,
+        });
+      } else {
+        chatMessages.push({
+          role: "system",
+          content:
+            `The user asked whether they have notes/books on something, but nothing in their ` +
+            `notes/library matched${plan.entity ? ` "${plan.entity}"` : ""}. Say plainly that ` +
+            `nothing matched — do not invent titles, authors, or facts.`,
         });
       }
     } else {

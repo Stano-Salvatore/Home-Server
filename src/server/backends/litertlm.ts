@@ -3,8 +3,10 @@ import type { ChatMessage, ChatStreamChunk, ModelBackend, RunningModel } from ".
 // litert-lm serve is started manually (tmux) and does not report health or
 // usage stats the way llama.cpp does — see LiteRT-LM issue #1929 (serve has
 // no --backend flag, so this is CPU-only until Google ships it upstream).
-const LITERTLM_BASE_URL = "http://127.0.0.1:9379";
-const LITERTLM_MODEL_ID = "gemma4-e2b";
+// Exported so other litert-lm callers (the Brain query planner) hit the same
+// server/model without duplicating the constants.
+export const LITERTLM_BASE_URL = "http://127.0.0.1:9379";
+export const LITERTLM_MODEL_ID = "gemma4-e2b";
 
 async function* streamChat(
   messages: ChatMessage[],
