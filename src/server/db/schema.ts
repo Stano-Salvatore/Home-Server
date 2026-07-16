@@ -52,6 +52,7 @@ export const conversations = sqliteTable("conversations", {
   scopeId: text("scope_id"),
   ragEnabled: integer("rag_enabled", { mode: "boolean" }).notNull().default(false),
   wikiEnabled: integer("wiki_enabled", { mode: "boolean" }).notNull().default(false),
+  webEnabled: integer("web_enabled", { mode: "boolean" }).notNull().default(false),
   createdAt: integer("created_at")
     .notNull()
     .default(sql`(unixepoch())`),
@@ -193,6 +194,25 @@ export const taskRuns = sqliteTable(
   },
   (t) => [index("task_runs_task_idx").on(t.taskId)],
 );
+
+export const researchRuns = sqliteTable("research_runs", {
+  id: text("id").primaryKey(),
+  prompt: text("prompt").notNull(),
+  mode: text("mode").notNull().default("auto"), // auto | product | compare | howto | factcheck
+  backend: text("backend").notNull(),
+  modelId: text("model_id").notNull(),
+  rounds: integer("rounds").notNull().default(2),
+  status: text("status").notNull().default("running"), // running | done | error | cancelled
+  statusText: text("status_text"),
+  round: integer("round").notNull().default(0),
+  sourcesCount: integer("sources_count").notNull().default(0),
+  report: text("report"),
+  error: text("error"),
+  createdAt: integer("created_at")
+    .notNull()
+    .default(sql`(unixepoch())`),
+  finishedAt: integer("finished_at"),
+});
 
 export const files = sqliteTable("files", {
   id: text("id").primaryKey(),

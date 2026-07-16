@@ -37,6 +37,7 @@ export function createConversation(opts: {
   scopeId?: string | null;
   ragEnabled?: boolean;
   wikiEnabled?: boolean;
+  webEnabled?: boolean;
 }) {
   const id = newId("conv");
   db.insert(conversations)
@@ -51,6 +52,7 @@ export function createConversation(opts: {
       // A pinned scope implies you want retrieval on.
       ragEnabled: opts.ragEnabled ?? !!opts.scopeId,
       wikiEnabled: opts.wikiEnabled ?? false,
+      webEnabled: opts.webEnabled ?? false,
     })
     .run();
   return getConversation(id)!;
@@ -62,6 +64,7 @@ export function updateConversation(
     title: string;
     ragEnabled: boolean;
     wikiEnabled: boolean;
+    webEnabled: boolean;
     backend: string;
     modelId: string;
     projectId: string | null;
@@ -133,6 +136,28 @@ async function getChatMemoryContext(
     const hits = await recallChatMemory(query, conversation);
     if (hits.length === 0) return null;
     return hits.map((h) => `- ${h.content}`).join("\n");
+  } catch {
+    return null;
+  }
+}
+
+export async function getWebContext(
+  query: string,
+): Promise<{ block: string; citations: Citation[] } | null> {
+  try {
+    const { webSearch } = await import("@/server/search/websearch");
+    const hits = await webSearch(query, 5);
+    if (hits.length === 0) return null;
+    const block = hits
+      .map((h, i) => `[S${i + 1}] (${h.title} — ${h.url}) ${h.snippet}`)
+      .join("\n\n");
+    const citations: Citation[] = hits.map((h) => ({
+      documentId: `web:${h.url}`,
+      title: h.title,
+      sourcePath: h.url,
+      snippet: h.snippet.slice(0, 200),
+    }));
+    return { block, citations };
   } catch {
     return null;
   }
@@ -343,6 +368,19 @@ async function* streamAssistant(
       chatMessages.push({
         role: "system",
         content: `Verified facts from Wikipedia — prefer these over memory for factual claims, and cite as [Wn]:\n\n${wiki.block}`,
+      });
+    }
+  }
+  if (conversation.webEnabled) {
+    yield { status: "searching the web…" };
+    const web = await getWebContext(userContent);
+    if (web) {
+      citationList.push(...web.citations);
+      chatMessages.push({
+        role: "system",
+        content:
+          `Live web search results fetched just now for this question — treat them as more ` +
+          `current than your training data, and cite as [Sn]:\n\n${web.block}`,
       });
     }
   }

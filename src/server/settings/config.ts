@@ -34,6 +34,12 @@ const AppConfigSchema = z.object({
   wikipediaProvider: z.string().default("online"),
   kiwixUrl: z.string().default(""),
   wikipediaLangs: z.string().default("en,cs"),
+  // Web search grounding: "duckduckgo" works with zero setup; "searxng"
+  // keeps the whole pipeline self-hosted (set searxngUrl); "brave" needs an
+  // API key; "disabled" turns the Web toggle into a no-op.
+  webSearchProvider: z.string().default("duckduckgo"),
+  searxngUrl: z.string().default(""),
+  braveApiKey: z.string().default(""),
 });
 
 export type AppConfig = z.infer<typeof AppConfigSchema>;
@@ -52,6 +58,9 @@ const ENV_DEFAULTS: Record<keyof AppConfig, string | undefined> = {
   wikipediaProvider: process.env.WIKIPEDIA_PROVIDER,
   kiwixUrl: process.env.KIWIX_URL,
   wikipediaLangs: process.env.WIKIPEDIA_LANGS,
+  webSearchProvider: process.env.WEB_SEARCH_PROVIDER,
+  searxngUrl: process.env.SEARXNG_URL,
+  braveApiKey: process.env.BRAVE_API_KEY,
 };
 
 function getRaw(key: string): string | undefined {

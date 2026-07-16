@@ -55,6 +55,7 @@ export default function ChatIndexPage() {
   const [model, setModel] = useState<{ backend: string; modelId: string } | null>(null);
   const [brain, setBrain] = useState(false);
   const [wiki, setWiki] = useState(false);
+  const [web, setWeb] = useState(false);
   const [starting, setStarting] = useState(false);
   const [greeting, setGreeting] = useState("");
 
@@ -93,6 +94,7 @@ export default function ChatIndexPage() {
           modelId: model.modelId,
           ragEnabled: brain,
           wikiEnabled: wiki,
+          webEnabled: web,
         }),
       });
       const data = await res.json();
@@ -166,6 +168,18 @@ export default function ChatIndexPage() {
               }}
             >
               Wikipedia
+            </button>
+            <button
+              onClick={() => setWeb((w) => !w)}
+              className={`rounded-full border px-3 py-1 text-xs transition-colors ${
+                web ? "border-accent text-accent" : "text-ink-dim hover:text-ink"
+              }`}
+              style={{
+                borderColor: web ? undefined : "var(--border)",
+                background: web ? "rgba(224, 108, 117, 0.10)" : undefined,
+              }}
+            >
+              Web
             </button>
           </div>
           <button

@@ -18,6 +18,9 @@ type Config = {
   wikipediaProvider: string;
   kiwixUrl: string;
   wikipediaLangs: string;
+  webSearchProvider: string;
+  searxngUrl: string;
+  braveApiKey: string;
 };
 
 type Status = Record<"vaultPath" | "libraryPath" | "uploadsPath", { exists: boolean; writable: boolean }>;
@@ -33,6 +36,8 @@ const FIELDS: { key: keyof Config; label: string; hint: string }[] = [
   { key: "qdrantUrl", label: "Qdrant URL (optional)", hint: "Blank = keep vectors in this phone's RAM. Set to a Qdrant server (e.g. http://<lenovo-ip>:6333) to hold memory off-device so it can scale to gigabytes." },
   { key: "kiwixUrl", label: "Kiwix URL(s) (offline Wikipedia)", hint: "kiwix-serve host(s). Comma-separate several to try in order — e.g. a small local ZIM first, a big one on another box as fallback." },
   { key: "wikipediaLangs", label: "Wikipedia languages", hint: "Comma-separated wiki codes, e.g. en,cs" },
+  { key: "searxngUrl", label: "SearXNG URL (optional)", hint: "Self-hosted SearXNG instance for the web search provider, e.g. http://<lenovo-ip>:8888" },
+  { key: "braveApiKey", label: "Brave Search API key (optional)", hint: "Only needed when the web search provider is Brave" },
 ];
 
 export default function SettingsPage() {
@@ -116,6 +121,24 @@ export default function SettingsPage() {
           <p className="text-xs text-ink-dim mt-1">
             Offline uses the Kiwix URL below; online falls back automatically if a chat has Wikipedia
             on and no Kiwix hit.
+          </p>
+        </div>
+
+        <div>
+          <label className="text-sm font-medium text-ink mb-1 block">Web search provider</label>
+          <select
+            className="w-full rounded-md bg-[var(--surface-2)] border border-[var(--border)] px-3 py-1.5 text-sm text-ink focus:outline-none focus:border-accent"
+            value={config.webSearchProvider}
+            onChange={(e) => setConfig({ ...config, webSearchProvider: e.target.value })}
+          >
+            <option value="duckduckgo">DuckDuckGo — free, no key</option>
+            <option value="searxng">SearXNG — self-hosted (set URL below)</option>
+            <option value="brave">Brave Search — needs API key</option>
+            <option value="disabled">Disabled</option>
+          </select>
+          <p className="text-xs text-ink-dim mt-1">
+            Used by the Web toggle in chat and by Deep Research. Needs internet (SearXNG needs your
+            instance reachable).
           </p>
         </div>
 

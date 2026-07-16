@@ -16,6 +16,7 @@ import {
   FolderKanban,
   Server,
   Settings,
+  Telescope,
   Menu,
   X,
 } from "lucide-react";
@@ -31,6 +32,7 @@ const NAV_GROUPS = [
   ],
   [
     { href: "/brain", label: "brain", icon: BrainCircuit },
+    { href: "/research", label: "deep research", icon: Telescope },
     { href: "/cookbook", label: "cookbook", icon: ChefHat },
     { href: "/nodes", label: "nodes", icon: Server },
     { href: "/library", label: "bibliotheca", icon: Library },

@@ -15,6 +15,7 @@ type Conversation = {
   scopeId: string | null;
   ragEnabled: boolean;
   wikiEnabled: boolean;
+  webEnabled: boolean;
 };
 type Project = { id: string; name: string; emoji: string | null };
 type Scope = { id: string; label: string; emoji?: string; color: string };
@@ -149,6 +150,18 @@ export default function ConversationPage({ params }: { params: Promise<{ id: str
               }}
             >
               Wikipedia
+            </button>
+            <button
+              onClick={() => patch({ webEnabled: !conversation.webEnabled })}
+              className={`rounded-full border px-3 py-1 text-xs transition-colors ${
+                conversation.webEnabled ? "border-accent text-accent" : "text-ink-dim hover:text-ink"
+              }`}
+              style={{
+                borderColor: conversation.webEnabled ? undefined : "var(--border)",
+                background: conversation.webEnabled ? "rgba(224, 108, 117, 0.10)" : undefined,
+              }}
+            >
+              Web
             </button>
           </div>
         )}

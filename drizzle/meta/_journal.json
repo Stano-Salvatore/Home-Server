@@ -43,6 +43,13 @@
       "when": 1783947117432,
       "tag": "0005_brain_chunks_fts",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1783947117433,
+      "tag": "0006_web_research",
+      "breakpoints": true
     }
   ]
 }
