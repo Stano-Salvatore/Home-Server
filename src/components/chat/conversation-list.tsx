@@ -6,6 +6,7 @@ import { Plus, Search, Pencil, Trash2, Check, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ModelPicker } from "./model-picker";
 import { useSidebarCollapsed } from "@/lib/useSidebarCollapsed";
+import { CONVERSATIONS_CHANGED_EVENT } from "@/lib/useChatStream";
 import type { ChatBackend } from "@/lib/types";
 
 type Conversation = {
@@ -44,6 +45,14 @@ export function ConversationList() {
   useEffect(() => {
     fetchConversations().then((list) => setConversations(list));
   }, [pathname]);
+
+  // A stream completing elsewhere (auto-title landing, updatedAt bumping for
+  // recency order) doesn't change the pathname, so it needs its own signal.
+  useEffect(() => {
+    const onChanged = () => fetchConversations().then(setConversations);
+    window.addEventListener(CONVERSATIONS_CHANGED_EVENT, onChanged);
+    return () => window.removeEventListener(CONVERSATIONS_CHANGED_EVENT, onChanged);
+  }, []);
 
   async function createConversation() {
     if (!pending) return;

@@ -8,7 +8,7 @@ import { addToIndex, removeDocumentFromIndex, floatsToBuffer, conversationIdOf }
 import { ftsInsertChunks, ftsDeleteDocument } from "./lexical";
 import { sha1, newId } from "@/server/util/hash";
 
-export type IngestSourceType = "obsidian" | "library" | "upload" | "manual" | "chat";
+export type IngestSourceType = "obsidian" | "library" | "upload" | "manual" | "chat" | "research";
 
 export function getDocumentBySourcePath(sourcePath: string) {
   return db.select().from(brainDocuments).where(eq(brainDocuments.sourcePath, sourcePath)).get();

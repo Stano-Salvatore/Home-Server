@@ -3,6 +3,12 @@
 import { useCallback, useRef, useState } from "react";
 import { friendlyError } from "@/lib/friendlyError";
 
+// Fired after any stream completes (send or regenerate) so sibling
+// components — namely the sidebar conversation list, which lives outside
+// this hook's tree — can refresh title/recency without needing a pathname
+// change. Same cross-component-signal pattern as useSidebarCollapsed.ts.
+export const CONVERSATIONS_CHANGED_EVENT = "nedory-conversations-changed";
+
 export type ChatUIMessage = {
   id: string;
   role: "user" | "assistant";
@@ -125,6 +131,7 @@ export function useChatStream(conversationId: string | null) {
     } finally {
       setStreaming(false);
       abortRef.current = null;
+      window.dispatchEvent(new Event(CONVERSATIONS_CHANGED_EVENT));
     }
   }, []);
 

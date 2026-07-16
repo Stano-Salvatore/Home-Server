@@ -496,6 +496,22 @@ async function* streamAssistant(
       } catch (err) {
         console.error("[chat] remember turn failed:", err);
       }
+
+      // Auto-title: the first exchange in a still-default-titled conversation
+      // (history includes only the just-inserted user message — see
+      // sendMessage, which writes it before calling streamAssistant) gets a
+      // real name from one quick model call. Best-effort, same as above.
+      if (conversation.title === "New Chat" && history.length === 1) {
+        try {
+          const { generateTitle } = await import("./autotitle");
+          const title = await generateTitle(userContent, full);
+          if (title) {
+            db.update(conversations).set({ title }).where(eq(conversations.id, conversationId)).run();
+          }
+        } catch (err) {
+          console.error("[chat] auto-title failed:", err);
+        }
+      }
     }
   }
 

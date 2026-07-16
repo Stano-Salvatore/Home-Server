@@ -20,6 +20,6 @@ export async function PATCH(_req: NextRequest, ctx: RouteContext<"/api/research/
 
 export async function DELETE(_req: NextRequest, ctx: RouteContext<"/api/research/[id]">) {
   const { id } = await ctx.params;
-  deleteRun(id);
+  await deleteRun(id);
   return NextResponse.json({ ok: true });
 }

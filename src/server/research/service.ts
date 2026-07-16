@@ -46,9 +46,19 @@ export function getRun(id: string) {
   return db.select().from(researchRuns).where(eq(researchRuns.id, id)).get();
 }
 
-export function deleteRun(id: string) {
+export async function deleteRun(id: string) {
   cancels().add(id); // if it's somehow still running, let it die quietly
   db.delete(researchRuns).where(eq(researchRuns.id, id)).run();
+  // Clean up the Brain document ingested on completion, if any — mirrors
+  // ingestDocument's stable sourcePath. Best-effort: a run with no report
+  // (never finished, or ingest itself failed earlier) has nothing to find.
+  try {
+    const { getDocumentBySourcePath, deleteDocument } = await import("@/server/brain/ingest");
+    const doc = getDocumentBySourcePath(`research:${id}`);
+    if (doc) await deleteDocument(doc.id);
+  } catch (err) {
+    console.error("[research] failed to remove ingested report from Brain:", err);
+  }
 }
 
 export function cancelRun(id: string) {
@@ -221,6 +231,23 @@ async function runResearch(id: string) {
       sourcesCount: allSources.length,
       finishedAt: Date.now() / 1000,
     });
+
+    // Feed the finished report into Brain so future questions (chat RAG,
+    // catalog browsing, later research runs) can retrieve it — research
+    // compounds instead of evaporating into a one-off run. Best-effort:
+    // never let an ingest failure mark an otherwise-successful run as
+    // failed. sourcePath is stable per run id, so this is safely re-runnable.
+    try {
+      const { ingestDocument } = await import("@/server/brain/ingest");
+      await ingestDocument({
+        sourceType: "research",
+        sourcePath: `research:${id}`,
+        title: run.prompt.length > 80 ? `${run.prompt.slice(0, 77)}...` : run.prompt,
+        content: report,
+      });
+    } catch (err) {
+      console.error("[research] failed to ingest report into Brain:", err);
+    }
   } catch (err) {
     if (cancelled(id)) return;
     progress(id, {
