@@ -5,6 +5,7 @@ import { useRouter, usePathname } from "next/navigation";
 import { Plus, Search, Pencil, Trash2, Check, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ModelPicker } from "./model-picker";
+import { useSidebarCollapsed } from "@/lib/useSidebarCollapsed";
 
 type Conversation = {
   id: string;
@@ -25,6 +26,9 @@ export function ConversationList() {
   const [editTitle, setEditTitle] = useState("");
   const router = useRouter();
   const pathname = usePathname();
+  // Slides away together with the nav rail — the hamburger clears the whole
+  // left side, not just the rail.
+  const [collapsed] = useSidebarCollapsed();
 
   function fetchConversations() {
     return fetch("/api/chat/conversations")
@@ -78,7 +82,11 @@ export function ConversationList() {
     : conversations;
 
   return (
-    <div className="w-64 shrink-0 border-r border-neutral-900 h-full flex flex-col p-3 gap-2">
+    <div
+      className={`w-64 shrink-0 border-r border-neutral-900 h-full flex flex-col p-3 gap-2 transition-all duration-200 ${
+        collapsed ? "md:-ml-64 md:invisible" : ""
+      }`}
+    >
       {!creating ? (
         <Button variant="secondary" onClick={() => setCreating(true)}>
           <Plus size={14} /> New Chat

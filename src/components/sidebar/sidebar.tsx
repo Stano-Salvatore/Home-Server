@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useSidebarCollapsed } from "@/lib/useSidebarCollapsed";
 import {
   MessageSquare,
   Bot,
@@ -84,31 +85,13 @@ function StatusRow() {
   );
 }
 
-const COLLAPSED_KEY = "nedory-sidebar-collapsed";
-
 export function Sidebar() {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
   // Desktop-only: the rail slides away entirely, Odysseus-style, leaving a
   // floating hamburger to bring it back. Mobile keeps the off-canvas drawer.
-  const [collapsed, setCollapsed] = useState(false);
-
-  // Restore the last choice after hydration (server HTML can't know it).
-  useEffect(() => {
-    const t = setTimeout(() => {
-      if (localStorage.getItem(COLLAPSED_KEY) === "1") setCollapsed(true);
-    }, 0);
-    return () => clearTimeout(t);
-  }, []);
-
-  function setCollapsedPersistent(next: boolean) {
-    setCollapsed(next);
-    try {
-      localStorage.setItem(COLLAPSED_KEY, next ? "1" : "0");
-    } catch {
-      // private mode etc. — the toggle still works for this visit
-    }
-  }
+  // Shared with the chat conversation list so both clear together.
+  const [collapsed, setCollapsedPersistent] = useSidebarCollapsed();
 
   return (
     <>
