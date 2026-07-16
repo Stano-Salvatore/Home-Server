@@ -125,23 +125,31 @@ export default function ConversationPage({ params }: { params: Promise<{ id: str
           )}
         </div>
         {conversation && (
-          <div className="flex items-center gap-4 shrink-0">
-            <label className="flex items-center gap-1.5 text-xs text-ink-dim">
-              <input
-                type="checkbox"
-                checked={conversation.ragEnabled}
-                onChange={() => patch({ ragEnabled: !conversation.ragEnabled })}
-              />
+          <div className="flex items-center gap-1.5 shrink-0">
+            <button
+              onClick={() => patch({ ragEnabled: !conversation.ragEnabled })}
+              className={`rounded-full border px-3 py-1 text-xs transition-colors ${
+                conversation.ragEnabled ? "border-accent text-accent" : "text-ink-dim hover:text-ink"
+              }`}
+              style={{
+                borderColor: conversation.ragEnabled ? undefined : "var(--border)",
+                background: conversation.ragEnabled ? "rgba(224, 108, 117, 0.10)" : undefined,
+              }}
+            >
               Brain
-            </label>
-            <label className="flex items-center gap-1.5 text-xs text-ink-dim">
-              <input
-                type="checkbox"
-                checked={conversation.wikiEnabled}
-                onChange={() => patch({ wikiEnabled: !conversation.wikiEnabled })}
-              />
+            </button>
+            <button
+              onClick={() => patch({ wikiEnabled: !conversation.wikiEnabled })}
+              className={`rounded-full border px-3 py-1 text-xs transition-colors ${
+                conversation.wikiEnabled ? "border-accent text-accent" : "text-ink-dim hover:text-ink"
+              }`}
+              style={{
+                borderColor: conversation.wikiEnabled ? undefined : "var(--border)",
+                background: conversation.wikiEnabled ? "rgba(224, 108, 117, 0.10)" : undefined,
+              }}
+            >
               Wikipedia
-            </label>
+            </button>
           </div>
         )}
       </div>
@@ -151,7 +159,7 @@ export default function ConversationPage({ params }: { params: Promise<{ id: str
           <p className="text-sm text-neutral-600">Say something to get started.</p>
         )}
         {messages.map((m) => (
-          <MessageBubble key={m.id} message={m} />
+          <MessageBubble key={m.id} message={m} modelLabel={conversation?.modelId} />
         ))}
         {canRegenerate && (
           <button

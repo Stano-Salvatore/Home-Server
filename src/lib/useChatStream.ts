@@ -14,6 +14,7 @@ export type ChatUIMessage = {
   // while the reply is still empty; cleared as soon as real text streams in.
   // Never persisted — history loads leave it unset.
   status?: string;
+  createdAt?: number; // epoch ms, for the card header timestamp
 };
 
 export function useChatStream(conversationId: string | null) {
@@ -36,6 +37,7 @@ export function useChatStream(conversationId: string | null) {
             citationsJson: string | null;
             durationMs: number | null;
             tokenCount: number | null;
+            createdAt: number | null;
           }) => ({
             id: m.id,
             role: m.role as "user" | "assistant",
@@ -43,6 +45,8 @@ export function useChatStream(conversationId: string | null) {
             citations: m.citationsJson ? JSON.parse(m.citationsJson) : undefined,
             durationMs: m.durationMs ?? undefined,
             tokenCount: m.tokenCount ?? undefined,
+            // DB stores unix seconds (drizzle unixepoch default)
+            createdAt: m.createdAt ? m.createdAt * 1000 : undefined,
           }),
         ),
     );
@@ -130,8 +134,8 @@ export function useChatStream(conversationId: string | null) {
       setError(null);
       setMessages((prev) => [
         ...prev,
-        { id: `local-user-${Date.now()}`, role: "user", content },
-        { id: `local-assistant-${Date.now()}`, role: "assistant", content: "" },
+        { id: `local-user-${Date.now()}`, role: "user", content, createdAt: Date.now() },
+        { id: `local-assistant-${Date.now()}`, role: "assistant", content: "", createdAt: Date.now() },
       ]);
       await runStream(`/api/chat/conversations/${conversationId}/messages`, { content });
     },
@@ -146,7 +150,7 @@ export function useChatStream(conversationId: string | null) {
     setMessages((prev) => {
       const next = [...prev];
       if (next.length && next[next.length - 1].role === "assistant") next.pop();
-      next.push({ id: `local-assistant-${Date.now()}`, role: "assistant", content: "" });
+      next.push({ id: `local-assistant-${Date.now()}`, role: "assistant", content: "", createdAt: Date.now() });
       return next;
     });
     await runStream(`/api/chat/conversations/${conversationId}/regenerate`);

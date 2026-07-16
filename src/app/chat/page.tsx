@@ -145,19 +145,25 @@ export default function ChatIndexPage() {
           <div className="flex items-center gap-1">
             <button
               onClick={() => setBrain((b) => !b)}
-              className={`rounded-md border px-2.5 py-1 text-xs transition-colors ${
+              className={`rounded-full border px-3 py-1 text-xs transition-colors ${
                 brain ? "border-accent text-accent" : "text-ink-dim hover:text-ink"
               }`}
-              style={{ borderColor: brain ? undefined : "var(--border)" }}
+              style={{
+                borderColor: brain ? undefined : "var(--border)",
+                background: brain ? "rgba(224, 108, 117, 0.10)" : undefined,
+              }}
             >
               Brain
             </button>
             <button
               onClick={() => setWiki((w) => !w)}
-              className={`rounded-md border px-2.5 py-1 text-xs transition-colors ${
+              className={`rounded-full border px-3 py-1 text-xs transition-colors ${
                 wiki ? "border-accent text-accent" : "text-ink-dim hover:text-ink"
               }`}
-              style={{ borderColor: wiki ? undefined : "var(--border)" }}
+              style={{
+                borderColor: wiki ? undefined : "var(--border)",
+                background: wiki ? "rgba(224, 108, 117, 0.10)" : undefined,
+              }}
             >
               Wikipedia
             </button>

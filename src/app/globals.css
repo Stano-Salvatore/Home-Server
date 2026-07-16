@@ -31,6 +31,10 @@
   --color-accent: #e06c75;
   --color-accent-hover: #eb828a;
   --color-accent-dim: #7f3b40;
+  /* Odysseus's secondary accent: muted steel blue for section headings,
+     labels and window-chrome details — the counterweight to the coral. */
+  --color-steel: #a9c4da;
+  --color-steel-dim: #6d8296;
   --color-term-green: #50fa7b;
   --color-term-gold: #f0ad4e;
   --color-term-red: #ff5555;
@@ -41,10 +45,11 @@
 }
 
 :root {
-  --bg: #0b0c0e;
-  --surface: #131417;
-  --surface-2: #191b1f;
-  --border: #26282e;
+  /* Blue-shifted blacks, matching Odysseus's slate-tinted panels. */
+  --bg: #0a0d11;
+  --surface: #10141a;
+  --surface-2: #171c24;
+  --border: #252c36;
 }
 
 html,
@@ -58,18 +63,21 @@ body {
   text-rendering: optimizeLegibility;
 }
 
-/* Thin, terminal-style scrollbars */
+/* Thin coral scrollbars — one of Odysseus's most recognizable details. */
 * {
   scrollbar-width: thin;
-  scrollbar-color: #2c2f36 transparent;
+  scrollbar-color: var(--color-accent-dim) transparent;
 }
 *::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+  width: 6px;
+  height: 6px;
 }
 *::-webkit-scrollbar-thumb {
-  background: #2c2f36;
-  border-radius: 4px;
+  background: var(--color-accent-dim);
+  border-radius: 999px;
+}
+*::-webkit-scrollbar-thumb:hover {
+  background: var(--color-accent);
 }
 
 ::selection {

@@ -20,18 +20,26 @@ import {
   X,
 } from "lucide-react";
 
-const NAV_ITEMS = [
-  { href: "/chat", label: "chat", icon: MessageSquare },
-  { href: "/projects", label: "projects", icon: FolderKanban },
-  { href: "/agents", label: "agents", icon: Bot },
-  { href: "/council", label: "council", icon: Users },
-  { href: "/brain", label: "brain", icon: BrainCircuit },
-  { href: "/cookbook", label: "cookbook", icon: ChefHat },
-  { href: "/nodes", label: "nodes", icon: Server },
-  { href: "/library", label: "bibliotheca", icon: Library },
-  { href: "/tasks", label: "tasks", icon: ListChecks },
-  { href: "/files", label: "files", icon: FolderOpenDot },
-  { href: "/settings", label: "settings", icon: Settings },
+// Grouped like Odysseus's rail: thin separators between clusters of
+// related tools instead of one long flat list.
+const NAV_GROUPS = [
+  [
+    { href: "/chat", label: "chat", icon: MessageSquare },
+    { href: "/projects", label: "projects", icon: FolderKanban },
+    { href: "/agents", label: "agents", icon: Bot },
+    { href: "/council", label: "council", icon: Users },
+  ],
+  [
+    { href: "/brain", label: "brain", icon: BrainCircuit },
+    { href: "/cookbook", label: "cookbook", icon: ChefHat },
+    { href: "/nodes", label: "nodes", icon: Server },
+    { href: "/library", label: "bibliotheca", icon: Library },
+  ],
+  [
+    { href: "/tasks", label: "tasks", icon: ListChecks },
+    { href: "/files", label: "files", icon: FolderOpenDot },
+    { href: "/settings", label: "settings", icon: Settings },
+  ],
 ];
 
 type Health = { online: number; total: number; services: number; servicesOnline: number };
@@ -162,32 +170,38 @@ export function Sidebar() {
             <X size={18} />
           </button>
         </div>
-        <ul className="flex flex-col gap-0.5 overflow-y-auto">
-          {NAV_ITEMS.map(({ href, label, icon: Icon }) => {
-            const active = pathname === href || pathname.startsWith(href + "/");
-            return (
-              <li key={href}>
-                <Link
-                  href={href}
-                  onClick={() => setOpen(false)}
-                  className={`group flex items-center gap-2.5 rounded-md px-3 py-2 text-sm transition-colors border-l-2 ${
-                    active
-                      ? "border-accent text-ink"
-                      : "border-transparent text-ink-dim hover:text-ink"
-                  }`}
-                  style={active ? { background: "var(--surface-2)" } : undefined}
-                >
-                  <Icon
-                    size={15}
-                    strokeWidth={2}
-                    className={active ? "text-accent" : "text-ink-dim group-hover:text-ink"}
-                  />
-                  {label}
-                </Link>
-              </li>
-            );
-          })}
-        </ul>
+        <div className="flex flex-col overflow-y-auto">
+          {NAV_GROUPS.map((group, gi) => (
+            <ul
+              key={gi}
+              className={`flex flex-col gap-0.5 ${gi > 0 ? "mt-2 pt-2 border-t" : ""}`}
+              style={gi > 0 ? { borderColor: "var(--border)" } : undefined}
+            >
+              {group.map(({ href, label, icon: Icon }) => {
+                const active = pathname === href || pathname.startsWith(href + "/");
+                return (
+                  <li key={href}>
+                    <Link
+                      href={href}
+                      onClick={() => setOpen(false)}
+                      className={`group flex items-center gap-2.5 rounded-md px-3 py-2 text-sm transition-colors ${
+                        active ? "text-accent" : "text-ink-dim hover:text-ink"
+                      }`}
+                      style={active ? { background: "rgba(224, 108, 117, 0.10)" } : undefined}
+                    >
+                      <Icon
+                        size={15}
+                        strokeWidth={2}
+                        className={active ? "text-accent" : "text-ink-dim group-hover:text-ink"}
+                      />
+                      {label}
+                    </Link>
+                  </li>
+                );
+              })}
+            </ul>
+          ))}
+        </div>
         <StatusRow />
       </nav>
     </>
