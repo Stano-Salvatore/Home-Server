@@ -1,4 +1,4 @@
-import { LITERTLM_BASE_URL, LITERTLM_MODEL_ID } from "@/server/backends/litertlm";
+import { litertlmBaseUrl, litertlmModelId } from "@/server/backends/litertlm";
 import { listCustomNodes, type CustomNode } from "./customNodes";
 import { isCatalogQuery, extractCatalogKeyword } from "./catalog";
 
@@ -55,11 +55,11 @@ export async function planQuery(userContent: string): Promise<QueryPlan> {
 
   const nodes = listCustomNodes();
   try {
-    const res = await fetch(`${LITERTLM_BASE_URL}/v1/chat/completions`, {
+    const res = await fetch(`${litertlmBaseUrl()}/v1/chat/completions`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        model: LITERTLM_MODEL_ID,
+        model: litertlmModelId(),
         stream: false,
         max_tokens: 64,
         temperature: 0,

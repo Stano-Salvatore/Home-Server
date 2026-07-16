@@ -1,4 +1,4 @@
-import { LITERTLM_BASE_URL, LITERTLM_MODEL_ID } from "@/server/backends/litertlm";
+import { litertlmBaseUrl, litertlmModelId } from "@/server/backends/litertlm";
 
 // Same architecture as brain/planner.ts and tools/planner.ts: one small-model
 // structured call, hard timeout, defensive parsing, silent no-op on any
@@ -14,11 +14,11 @@ const SYSTEM_PROMPT =
 
 export async function generateTitle(userContent: string, assistantContent: string): Promise<string | null> {
   try {
-    const res = await fetch(`${LITERTLM_BASE_URL}/v1/chat/completions`, {
+    const res = await fetch(`${litertlmBaseUrl()}/v1/chat/completions`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        model: LITERTLM_MODEL_ID,
+        model: litertlmModelId(),
         stream: false,
         max_tokens: 20,
         temperature: 0.3,

@@ -1,4 +1,4 @@
-import { LITERTLM_BASE_URL, LITERTLM_MODEL_ID } from "@/server/backends/litertlm";
+import { litertlmBaseUrl, litertlmModelId } from "@/server/backends/litertlm";
 import type { ToolDef, ToolCall } from "./types";
 
 // Tool selection follows the same shape as brain/planner.ts: one small-model
@@ -26,11 +26,11 @@ export async function planToolCalls(userContent: string, tools: ToolDef[]): Prom
   const validNames = new Set(tools.map((t) => t.name));
 
   try {
-    const res = await fetch(`${LITERTLM_BASE_URL}/v1/chat/completions`, {
+    const res = await fetch(`${litertlmBaseUrl()}/v1/chat/completions`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        model: LITERTLM_MODEL_ID,
+        model: litertlmModelId(),
         stream: false,
         max_tokens: 200,
         temperature: 0,

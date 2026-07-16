@@ -12,6 +12,8 @@ type Config = {
   llamaCppBinPath: string;
   llamaCppEnv: string;
   ollamaHost: string;
+  litertlmBaseUrl: string;
+  litertlmModelId: string;
   embeddingModel: string;
   embeddingHost: string;
   qdrantUrl: string;
@@ -31,6 +33,8 @@ const FIELDS: { key: keyof Config; label: string; hint: string }[] = [
   { key: "llamaCppBinPath", label: "llama.cpp binary path", hint: "e.g. llama-server or /usr/local/bin/llama-server" },
   { key: "llamaCppEnv", label: "llama.cpp environment overrides (optional)", hint: "Space-separated KEY=value pairs passed to every launch, e.g. VK_ICD_FILENAMES=/data/data/com.termux/files/usr/share/vulkan/icd.d/freedreno_icd.aarch64.json — needed for Vulkan/Turnip GPU builds on Android, whose default driver silently ignores this and falls back to CPU/a crashing proprietary driver." },
   { key: "ollamaHost", label: "Ollama host", hint: "e.g. http://127.0.0.1:11434" },
+  { key: "litertlmBaseUrl", label: "litert-lm serve URL", hint: "Started manually in tmux — see the litertlm backend. Keep it 127.0.0.1 unless you know you want it reachable from other devices." },
+  { key: "litertlmModelId", label: "litert-lm default model id", hint: "The friendly name from `litert-lm import ... <model-id>`. Used when a chat's target model id isn't otherwise known." },
   { key: "embeddingModel", label: "Embedding model", hint: "Ollama model used for Brain embeddings (e.g. bge-m3, nomic-embed-text)" },
   { key: "embeddingHost", label: "Embedding host (optional)", hint: "Ollama for embeddings; blank = same as chat node. Set to this phone's own Ollama (e.g. http://127.0.0.1:11434) to keep it off the compute node." },
   { key: "qdrantUrl", label: "Qdrant URL (optional)", hint: "Blank = keep vectors in this phone's RAM. Set to a Qdrant server (e.g. http://<lenovo-ip>:6333) to hold memory off-device so it can scale to gigabytes." },

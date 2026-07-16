@@ -17,6 +17,12 @@ const AppConfigSchema = z.object({
   // Turnip ICD JSON (see bin/install-vulkan-llama). Blank = don't override.
   llamaCppEnv: z.string().default(""),
   ollamaHost: z.string().default("http://127.0.0.1:11434"),
+  // litert-lm serve's OpenAI-compatible endpoint. Deliberately 127.0.0.1, not
+  // 0.0.0.0 — binding wider would expose an unauthenticated LLM endpoint on
+  // every network interface. Model id must match whatever `litert-lm import`
+  // named it (see the litert-lm backend module for the full launch story).
+  litertlmBaseUrl: z.string().default("http://127.0.0.1:9379"),
+  litertlmModelId: z.string().default("gemma4-e2b"),
   // bge-m3 is multilingual (EN/CS/SK and more) and embeds Czech notes far
   // better than the English-centric nomic-embed-text default used to.
   embeddingModel: z.string().default("bge-m3"),
@@ -51,6 +57,8 @@ const ENV_DEFAULTS: Record<keyof AppConfig, string | undefined> = {
   llamaCppBinPath: process.env.LLAMACPP_BIN_PATH,
   llamaCppEnv: process.env.LLAMACPP_ENV,
   ollamaHost: process.env.OLLAMA_HOST,
+  litertlmBaseUrl: process.env.LITERTLM_BASE_URL,
+  litertlmModelId: process.env.LITERTLM_MODEL_ID,
   embeddingModel: process.env.EMBEDDING_MODEL,
   embeddingHost: process.env.EMBEDDING_HOST,
   qdrantUrl: process.env.QDRANT_URL,

@@ -1,21 +1,34 @@
+import { loadSettings } from "@/server/settings/config";
 import type { ChatMessage, ChatStreamChunk, ModelBackend, RunningModel } from "./types";
 
 // litert-lm serve is started manually (tmux) and does not report health or
 // usage stats the way llama.cpp does — see LiteRT-LM issue #1929 (serve has
 // no --backend flag, so this is CPU-only until Google ships it upstream).
-// Exported so other litert-lm callers (the Brain query planner) hit the same
-// server/model without duplicating the constants.
-export const LITERTLM_BASE_URL = "http://127.0.0.1:9379";
-export const LITERTLM_MODEL_ID = "gemma4-e2b";
+// Settings-backed (not hardcoded constants) so the base URL/default model can
+// be changed without a redeploy — same pattern every other backend/provider
+// URL in this app follows (ollamaHost, kiwixUrl, searxngUrl, ...). Other
+// litert-lm callers (Brain planner, tool planner, autotitle) import these too
+// rather than duplicating the lookup.
+export function litertlmBaseUrl(): string {
+  return loadSettings().litertlmBaseUrl;
+}
+export function litertlmModelId(): string {
+  return loadSettings().litertlmModelId;
+}
 
 async function* streamChat(
+  target: string,
   messages: ChatMessage[],
   signal?: AbortSignal,
 ): AsyncIterable<ChatStreamChunk> {
-  const res = await fetch(`${LITERTLM_BASE_URL}/v1/chat/completions`, {
+  // target is whatever model id the picker resolved (normally whatever
+  // litert-lm's own /v1/models reported) — only the configured default id
+  // covers the (extremely common today) case of an empty/unset target.
+  const model = target || litertlmModelId();
+  const res = await fetch(`${litertlmBaseUrl()}/v1/chat/completions`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ model: LITERTLM_MODEL_ID, messages, stream: true }),
+    body: JSON.stringify({ model, messages, stream: true }),
     signal,
   });
   if (!res.ok || !res.body) {
@@ -50,25 +63,29 @@ export const litertLmBackend: ModelBackend = {
   kind: "litertlm",
   async listRunning(): Promise<RunningModel[]> {
     try {
-      const res = await fetch(`${LITERTLM_BASE_URL}/v1/models`);
+      const baseUrl = litertlmBaseUrl();
+      const res = await fetch(`${baseUrl}/v1/models`);
       if (!res.ok) return [];
       const data = await res.json();
+      // Parsed from the actual configured URL rather than hardcoded, so the
+      // Cookbook/Nodes UI still shows the right port if it's ever changed.
+      const port = Number(new URL(baseUrl).port) || undefined;
       return (data.data ?? []).map((m: { id: string }) => ({
         id: m.id,
         backend: "litertlm" as const,
         label: m.id,
-        port: 9379,
+        port,
       }));
     } catch {
       return [];
     }
   },
-  chatStream(_target, messages, signal) {
-    return streamChat(messages, signal);
+  chatStream(target, messages, signal) {
+    return streamChat(target, messages, signal);
   },
-  async chatComplete(_target, messages) {
+  async chatComplete(target, messages) {
     let full = "";
-    for await (const chunk of streamChat(messages)) full += chunk.text;
+    for await (const chunk of streamChat(target, messages)) full += chunk.text;
     return full;
   },
 };
