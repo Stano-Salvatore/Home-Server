@@ -106,6 +106,7 @@ export default function SettingsPage() {
       </p>
 
       <VaultsCard />
+      <SecurityCard />
 
       <Card className="p-5 flex flex-col gap-5">
         <div>
@@ -184,6 +185,95 @@ export default function SettingsPage() {
         </div>
       </Card>
     </div>
+  );
+}
+
+// Deliberately its own component with its own fetch/save, hitting
+// /api/auth/password rather than the generic /api/settings PUT — the
+// dashboard password is a distinct, security-sensitive setting (it must
+// never round-trip back in a GET response the way ordinary config fields
+// do), not part of AppConfig.
+function SecurityCard() {
+  const [enabled, setEnabled] = useState<boolean | null>(null);
+  const [password, setPassword] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [message, setMessage] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetch("/api/auth/status")
+      .then((r) => r.json())
+      .then((d) => setEnabled(!!d.enabled));
+  }, []);
+
+  async function save() {
+    setSaving(true);
+    setMessage(null);
+    try {
+      const res = await fetch("/api/auth/password", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ password }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setMessage(data.error ?? "Failed to save");
+        return;
+      }
+      setEnabled(data.enabled);
+      setPassword("");
+      setMessage(data.enabled ? "Password set — future visits will require it." : "Password protection turned off.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  if (enabled === null) return null;
+
+  return (
+    <Card className="p-5 flex flex-col gap-2 mb-6">
+      <label className="text-sm font-medium text-ink mb-1 block">Dashboard password</label>
+      <p className="text-xs text-ink-dim">
+        {enabled
+          ? "A password is currently set — every device on your network needs it to reach this dashboard."
+          : "No password set. Anyone who can reach this device on your network (Tailscale, LAN, etc.) can use the dashboard and read your notes/chats. Set one to lock it down."}
+      </p>
+      <input
+        type="password"
+        className="rounded-md bg-[var(--surface-2)] border border-[var(--border)] px-3 py-1.5 text-sm text-ink focus:outline-none focus:border-accent"
+        placeholder={enabled ? "New password (leave blank to keep current)" : "Set a password"}
+        value={password}
+        onChange={(e) => setPassword(e.target.value)}
+      />
+      <div className="flex items-center gap-2 mt-1">
+        <Button onClick={save} disabled={saving || (!password && !enabled)}>
+          {saving ? "saving…" : enabled ? "update password" : "enable password"}
+        </Button>
+        {enabled && (
+          <Button
+            variant="ghost"
+            onClick={async () => {
+              setSaving(true);
+              setMessage(null);
+              try {
+                const res = await fetch("/api/auth/password", {
+                  method: "PUT",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ password: "" }),
+                });
+                const data = await res.json();
+                setEnabled(data.enabled);
+                setMessage("Password protection turned off.");
+              } finally {
+                setSaving(false);
+              }
+            }}
+          >
+            turn off
+          </Button>
+        )}
+        {message && <span className="text-xs text-ink-dim">{message}</span>}
+      </div>
+    </Card>
   );
 }
 

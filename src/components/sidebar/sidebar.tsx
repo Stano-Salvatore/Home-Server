@@ -19,6 +19,7 @@ import {
   Telescope,
   Menu,
   X,
+  LogOut,
 } from "lucide-react";
 
 // Grouped like Odysseus's rail: thin separators between clusters of
@@ -95,6 +96,40 @@ function StatusRow() {
   );
 }
 
+// Only rendered once we know a dashboard password is actually set — most
+// installs never turn this on, and a logout button with nothing to log out
+// of is just confusing chrome.
+function LogoutButton() {
+  const [enabled, setEnabled] = useState(false);
+
+  useEffect(() => {
+    let alive = true;
+    fetch("/api/auth/status")
+      .then((r) => r.json())
+      .then((d) => {
+        if (alive) setEnabled(!!d.enabled);
+      })
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  if (!enabled) return null;
+  return (
+    <button
+      onClick={() => {
+        fetch("/api/auth/logout", { method: "POST" }).finally(() => {
+          window.location.href = "/login";
+        });
+      }}
+      className="flex items-center gap-2 px-2 py-1.5 text-[11px] text-ink-dim hover:text-ink"
+    >
+      <LogOut size={12} /> log out
+    </button>
+  );
+}
+
 export function Sidebar() {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
@@ -102,6 +137,11 @@ export function Sidebar() {
   // floating hamburger to bring it back. Mobile keeps the off-canvas drawer.
   // Shared with the chat conversation list so both clear together.
   const [collapsed, setCollapsedPersistent] = useSidebarCollapsed();
+
+  // The login page renders its own centered layout — no nav chrome to leak
+  // (every link on it would just bounce back to /login unauthenticated
+  // anyway, via proxy.ts).
+  if (pathname === "/login") return null;
 
   return (
     <>
@@ -204,6 +244,7 @@ export function Sidebar() {
             </ul>
           ))}
         </div>
+        <LogoutButton />
         <StatusRow />
       </nav>
     </>
