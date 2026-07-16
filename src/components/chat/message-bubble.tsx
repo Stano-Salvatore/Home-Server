@@ -18,6 +18,7 @@ export function MessageBubble({ message }: { message: ChatUIMessage }) {
   const [saved, setSaved] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [showSources, setShowSources] = useState(false);
 
   async function saveToObsidian() {
     setSaving(true);
@@ -54,15 +55,43 @@ export function MessageBubble({ message }: { message: ChatUIMessage }) {
         ) : message.content ? (
           <Markdown content={message.content} />
         ) : (
-          <span className="text-accent inline-flex"><ThinkingSpiral /></span>
+          <span className="text-accent inline-flex items-center gap-2">
+            <ThinkingSpiral />
+            {message.status && (
+              <span className="text-xs text-neutral-500">{message.status}</span>
+            )}
+          </span>
         )}
         {message.citations && message.citations.length > 0 && (
-          <div className="mt-2 pt-2 border-t border-neutral-800 flex flex-col gap-1">
-            {message.citations.map((c, i) => (
-              <div key={c.documentId + i} className="text-xs text-neutral-500">
-                [{i + 1}] {c.title} — <span className="italic">{c.snippet}</span>
+          <div className="mt-2 pt-2 border-t border-neutral-800">
+            <button
+              onClick={() => setShowSources((s) => !s)}
+              className="text-xs text-neutral-500 hover:text-neutral-300"
+            >
+              {showSources
+                ? "Hide sources"
+                : `${message.citations.length} source${message.citations.length === 1 ? "" : "s"}`}
+            </button>
+            {showSources && (
+              <div className="mt-1.5 flex flex-col gap-1.5">
+                {message.citations.map((c, i) => (
+                  <div
+                    key={c.documentId + i}
+                    className="rounded border border-neutral-800 px-2 py-1.5"
+                  >
+                    <div className="text-xs text-neutral-300">
+                      [{i + 1}] {c.title}
+                    </div>
+                    {c.snippet && (
+                      <div className="mt-0.5 text-xs text-neutral-500 italic">{c.snippet}</div>
+                    )}
+                    <div className="mt-0.5 text-[10px] text-neutral-600 truncate">
+                      {c.sourcePath}
+                    </div>
+                  </div>
+                ))}
               </div>
-            ))}
+            )}
           </div>
         )}
         {!isUser && message.content && (

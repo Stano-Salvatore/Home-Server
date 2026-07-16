@@ -2,6 +2,7 @@ import { eq } from "drizzle-orm";
 import { db } from "@/server/db/client";
 import { brainDocuments, brainChunks } from "@/server/db/schema";
 import { chunkText, estimateTokenCount } from "./chunker";
+import { cleanNoteContent } from "./cleanText";
 import { embedTexts } from "./embeddings";
 import { addToIndex, removeDocumentFromIndex, floatsToBuffer, conversationIdOf } from "./vectorStore";
 import { ftsInsertChunks, ftsDeleteDocument } from "./lexical";
@@ -33,7 +34,11 @@ export async function ingestDocument(opts: {
   content: string;
   projectId?: string | null;
 }): Promise<{ document: typeof brainDocuments.$inferSelect; unchanged: boolean }> {
-  const contentHash = sha1(opts.content);
+  // Cleaning happens before hashing on purpose: a cleaner-version bump makes
+  // exactly the affected notes hash differently, so the next vault rescan
+  // re-chunks them (and skips notes the cleaning doesn't change).
+  const content = cleanNoteContent(opts.content);
+  const contentHash = sha1(content);
   const existing = getDocumentBySourcePath(opts.sourcePath);
 
   if (existing && existing.contentHash === contentHash) {
@@ -48,7 +53,7 @@ export async function ingestDocument(opts: {
     await removeDocumentFromIndex(documentId);
   }
 
-  const chunks = chunkText(opts.content);
+  const chunks = chunkText(content);
   const embeddings = chunks.length > 0 ? await embedTexts(chunks) : [];
 
   const now = Date.now();

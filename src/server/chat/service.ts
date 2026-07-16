@@ -102,16 +102,20 @@ export async function getRagContext(
   try {
     const { searchBrain } = await import("@/server/brain/search");
     const { knowledgeFilter } = await import("@/server/brain/chatMemory");
+    const { presentChunk } = await import("@/server/brain/cleanText");
     const hits = await searchBrain(query, 5, { filter: knowledgeFilter(projectId, scopeDocIds) });
     if (hits.length === 0) return null;
+    // presentChunk is display/context-only cleanup (metadata scaffolding,
+    // title-heading repetition) — stored chunk text stays untouched so FTS
+    // and embeddings keep matching it.
     const block = hits
-      .map((h, i) => `[${i + 1}] (${h.title}) ${h.content}`)
+      .map((h, i) => `[${i + 1}] (${h.title}) ${presentChunk(h.content, h.title)}`)
       .join("\n\n");
     const citations: Citation[] = hits.map((h) => ({
       documentId: h.documentId,
       title: h.title,
       sourcePath: h.sourcePath,
-      snippet: h.content.slice(0, 200),
+      snippet: presentChunk(h.content, h.title).slice(0, 200),
     }));
     return { block, citations };
   } catch {
@@ -168,7 +172,7 @@ async function* streamAssistant(
   conversation: Conversation,
   userContent: string,
   signal?: AbortSignal,
-): AsyncGenerator<{ delta?: string; citations?: Citation[]; stats?: GenStats }> {
+): AsyncGenerator<{ delta?: string; citations?: Citation[]; stats?: GenStats; status?: string }> {
   const conversationId = conversation.id;
   const history = listMessages(conversationId).slice(-HISTORY_LIMIT);
   const chatMessages: ChatMessage[] = [];
@@ -183,6 +187,12 @@ async function* streamAssistant(
       content: `Pinned facts about the user:\n\n${memoryBlock}`,
     });
   }
+
+  // Status yields are purely cosmetic progress hints for the UI — Brain
+  // replies spend 30-60s in retrieval + CPU prefill before the first token,
+  // and silence that long reads as frozen. They carry no data and losing one
+  // must never affect the reply.
+  yield { status: "recalling context…" };
 
   // Always-on long-term memory: recall relevant snippets from past chats.
   const recall = await getChatMemoryContext(userContent, conversation);
@@ -213,8 +223,10 @@ async function* streamAssistant(
     // zero-cost fast path and otherwise asks the local litert-lm model, with
     // a hard timeout that degrades to "answer" mode — so chat never blocks or
     // breaks when the model is down.
+    yield { status: "understanding your question…" };
     const { planQuery } = await import("@/server/brain/planner");
     const plan = await planQuery(userContent);
+    yield { status: "searching your notes…" };
 
     // A planner-resolved scope narrows retrieval only when the conversation
     // has no pinned scope — a user-pinned scope always wins over the plan.
@@ -358,6 +370,10 @@ async function* streamAssistant(
     chatMessages.push({ role: m.role as "user" | "assistant", content: m.content });
   }
 
+  // Distinguishes "still searching" from "found it, now generating" — on
+  // litert-lm the CPU prefill after this line is the longest silent phase.
+  yield { status: "writing a reply…" };
+
   const backend = backendFor(conversation.backend as "ollama" | "llamacpp");
   let full = "";
   let reportedTokenCount: number | undefined;
@@ -419,7 +435,7 @@ export async function* sendMessage(
   conversationId: string,
   userContent: string,
   signal?: AbortSignal,
-): AsyncGenerator<{ delta?: string; citations?: Citation[]; stats?: GenStats }> {
+): AsyncGenerator<{ delta?: string; citations?: Citation[]; stats?: GenStats; status?: string }> {
   const conversation = getConversation(conversationId);
   if (!conversation) throw new Error("Conversation not found");
 
@@ -437,7 +453,7 @@ export async function* sendMessage(
 export async function* regenerateLast(
   conversationId: string,
   signal?: AbortSignal,
-): AsyncGenerator<{ delta?: string; citations?: Citation[]; stats?: GenStats }> {
+): AsyncGenerator<{ delta?: string; citations?: Citation[]; stats?: GenStats; status?: string }> {
   const conversation = getConversation(conversationId);
   if (!conversation) throw new Error("Conversation not found");
 

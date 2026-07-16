@@ -10,6 +10,10 @@ export type ChatUIMessage = {
   citations?: { documentId: string; title: string; sourcePath: string; snippet: string }[];
   durationMs?: number;
   tokenCount?: number;
+  // Transient retrieval/generation phase hint ("searching your notes…") shown
+  // while the reply is still empty; cleared as soon as real text streams in.
+  // Never persisted — history loads leave it unset.
+  status?: string;
 };
 
 export function useChatStream(conversationId: string | null) {
@@ -81,7 +85,14 @@ export function useChatStream(conversationId: string | null) {
               next[next.length - 1] = {
                 ...next[next.length - 1],
                 content: next[next.length - 1].content + data.delta,
+                status: undefined,
               };
+              return next;
+            });
+          } else if (data.status) {
+            setMessages((prev) => {
+              const next = [...prev];
+              next[next.length - 1] = { ...next[next.length - 1], status: data.status };
               return next;
             });
           } else if (data.citations) {
