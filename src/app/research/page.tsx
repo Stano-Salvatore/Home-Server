@@ -5,6 +5,7 @@ import { Play, X, Trash2, ChevronDown, ChevronUp } from "lucide-react";
 import { ModelPicker } from "@/components/chat/model-picker";
 import { Markdown } from "@/components/chat/markdown";
 import { ThinkingSpiral } from "@/components/ui/thinking-spiral";
+import type { ChatBackend } from "@/lib/types";
 
 type Run = {
   id: string;
@@ -244,7 +245,7 @@ export default function ResearchPage() {
           style={{ borderColor: "var(--border)" }}
         >
           <ModelPicker
-            value={model as { backend: "ollama" | "llamacpp"; modelId: string } | null}
+            value={model as { backend: ChatBackend; modelId: string } | null}
             onChange={(v) => setModel({ backend: v.backend, modelId: v.modelId })}
           />
           <label className="flex items-center gap-1.5 text-xs text-ink-dim">

@@ -2,7 +2,7 @@ import { eq, desc } from "drizzle-orm";
 import { db } from "@/server/db/client";
 import { researchRuns } from "@/server/db/schema";
 import { backendFor } from "@/server/backends/registry";
-import type { ChatMessage } from "@/server/backends/types";
+import type { ChatMessage, BackendKind } from "@/server/backends/types";
 import { newId } from "@/server/util/hash";
 
 // Deep Research, Odysseus-style: multi-round gather → read → synthesize jobs
@@ -90,7 +90,7 @@ async function ask(backend: string, modelId: string, system: string, user: strin
     { role: "system", content: system },
     { role: "user", content: user },
   ];
-  return backendFor(backend as "ollama" | "llamacpp" | "litertlm").chatComplete(modelId, messages);
+  return backendFor(backend as BackendKind).chatComplete(modelId, messages);
 }
 
 async function gatherSources(query: string): Promise<Source[]> {

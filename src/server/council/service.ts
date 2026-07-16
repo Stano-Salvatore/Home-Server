@@ -1,9 +1,9 @@
 import { backendFor } from "@/server/backends/registry";
-import type { ChatMessage } from "@/server/backends/types";
+import type { ChatMessage, BackendKind } from "@/server/backends/types";
 import { getMemoryContext, getWikipediaContext, getRagContext } from "@/server/chat/service";
 
 export type CouncilAsk = {
-  backend: "ollama" | "llamacpp";
+  backend: BackendKind;
   modelId: string;
   prompt: string;
   systemPrompt?: string;

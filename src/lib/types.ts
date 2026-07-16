@@ -1,3 +1,12 @@
+// Single source of truth for which backends a model/conversation/task can
+// target — mirrors server/backends/types.ts's ModelBackend["kind"]. Import
+// this instead of repeating the "ollama" | "llamacpp" | "litertlm" literal;
+// a stale copy of that union silently stops type-checking real assignments
+// once a new backend is added (litertlm was missing from every client-side
+// copy of this union until this fix — no runtime bug since JSON responses
+// are untyped, but it made the type checker blind to real mismatches).
+export type ChatBackend = "ollama" | "llamacpp" | "litertlm";
+
 export type HardwareInfo = {
   cpuCores: number;
   cpuModel: string;
@@ -31,7 +40,7 @@ export type ScoredModel = {
 
 export type ModelOption = {
   id: string;
-  backend: "ollama" | "llamacpp";
+  backend: ChatBackend;
   label: string;
   contextLength?: number;
   port?: number;

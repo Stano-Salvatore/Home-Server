@@ -1,14 +1,14 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import type { ModelOption } from "@/lib/types";
+import type { ModelOption, ChatBackend } from "@/lib/types";
 
 export function ModelPicker({
   value,
   onChange,
 }: {
-  value: { backend: "ollama" | "llamacpp"; modelId: string } | null;
-  onChange: (v: { backend: "ollama" | "llamacpp"; modelId: string; label: string }) => void;
+  value: { backend: ChatBackend; modelId: string } | null;
+  onChange: (v: { backend: ChatBackend; modelId: string; label: string }) => void;
 }) {
   const [options, setOptions] = useState<ModelOption[]>([]);
 
@@ -28,7 +28,7 @@ export function ModelPicker({
         const [backend, ...rest] = e.target.value.split(":");
         const modelId = rest.join(":");
         const opt = options.find((o) => o.backend === backend && o.id === modelId);
-        if (opt) onChange({ backend: backend as "ollama" | "llamacpp", modelId, label: opt.label });
+        if (opt) onChange({ backend: backend as ChatBackend, modelId, label: opt.label });
       }}
     >
       <option value="" disabled>

@@ -3,11 +3,12 @@ import { db } from "@/server/db/client";
 import { tasks, taskRuns } from "@/server/db/schema";
 import { newId } from "@/server/util/hash";
 import { reconcile } from "./scheduler";
+import type { BackendKind } from "@/server/backends/types";
 
 export type TaskInput = {
   name: string;
   prompt: string;
-  backend: "ollama" | "llamacpp";
+  backend: BackendKind;
   modelId: string;
   triggerType: "manual" | "cron" | "file_watch";
   cronExpression?: string | null;

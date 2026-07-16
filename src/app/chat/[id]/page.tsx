@@ -5,6 +5,7 @@ import { useChatStream } from "@/lib/useChatStream";
 import { MessageBubble } from "@/components/chat/message-bubble";
 import { ModelPicker } from "@/components/chat/model-picker";
 import { ArrowUp, Square, RefreshCw } from "lucide-react";
+import type { ChatBackend } from "@/lib/types";
 
 type Conversation = {
   id: string;
@@ -85,7 +86,7 @@ export default function ConversationPage({ params }: { params: Promise<{ id: str
           {conversation ? (
             <>
               <ModelPicker
-                value={{ backend: conversation.backend as "ollama" | "llamacpp", modelId: conversation.modelId }}
+                value={{ backend: conversation.backend as ChatBackend, modelId: conversation.modelId }}
                 onChange={(v) => patch({ backend: v.backend, modelId: v.modelId })}
               />
               <select

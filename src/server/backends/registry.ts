@@ -2,7 +2,7 @@ import { listLoadedSizes, listInstalledTags, isOllamaReachable, ollamaBackend } 
 import { llamaCppBackend } from "./llamacpp";
 import { litertLmBackend } from "./litertlm";
 import { listNodes, makeOllamaTarget } from "@/server/nodes/nodes";
-import type { ModelBackend, RunningModel } from "./types";
+import type { ModelBackend, RunningModel, BackendKind } from "./types";
 
 export type ModelOption = RunningModel & { idle?: boolean; nodeId?: string; nodeName?: string };
 
@@ -68,7 +68,7 @@ export async function listAllModelOptions(): Promise<ModelOption[]> {
   return [...ollamaOptions, ...llamacppRunning, ...litertlmRunning];
 }
 
-export function backendFor(kind: "ollama" | "llamacpp" | "litertlm"): ModelBackend {
+export function backendFor(kind: BackendKind): ModelBackend {
   if (kind === "ollama") return ollamaBackend;
   if (kind === "llamacpp") return llamaCppBackend;
   return litertLmBackend;

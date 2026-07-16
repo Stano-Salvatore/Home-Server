@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowUp } from "lucide-react";
 import { ModelPicker } from "@/components/chat/model-picker";
+import type { ChatBackend } from "@/lib/types";
 
 const LAST_MODEL_KEY = "nedory-last-model";
 
@@ -139,7 +140,7 @@ export default function ChatIndexPage() {
             }}
           />
           <ModelPicker
-            value={model as { backend: "ollama" | "llamacpp"; modelId: string } | null}
+            value={model as { backend: ChatBackend; modelId: string } | null}
             onChange={(v) => setModel({ backend: v.backend, modelId: v.modelId })}
           />
         </div>

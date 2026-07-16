@@ -3,6 +3,7 @@ import { eq } from "drizzle-orm";
 import { db } from "@/server/db/client";
 import { tasks, taskRuns } from "@/server/db/schema";
 import { backendFor } from "@/server/backends/registry";
+import type { BackendKind } from "@/server/backends/types";
 import { newId } from "@/server/util/hash";
 
 const MAX_INJECTED_FILE_CHARS = 4000;
@@ -39,7 +40,7 @@ export async function runTask(
       }
     }
 
-    const backend = backendFor(task.backend as "ollama" | "llamacpp");
+    const backend = backendFor(task.backend as BackendKind);
     const output = await backend.chatComplete(task.modelId, [{ role: "user", content: prompt }]);
 
     if (task.saveToVault) {

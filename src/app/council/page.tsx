@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { ModelPicker } from "@/components/chat/model-picker";
 import { Send, Square, Sparkles, Plus, X } from "lucide-react";
-import type { ModelOption } from "@/lib/types";
+import type { ModelOption, ChatBackend } from "@/lib/types";
 import { resolveAgentOption } from "@/lib/agentModel";
 import { friendlyError } from "@/lib/friendlyError";
 import { Markdown } from "@/components/chat/markdown";
@@ -17,7 +17,7 @@ type Participant = {
   name: string;
   emoji: string;
   color: string;
-  backend: "ollama" | "llamacpp";
+  backend: ChatBackend;
   modelId: string;
   systemPrompt?: string;
   wikiDefault?: boolean;
@@ -70,7 +70,7 @@ export default function CouncilPage() {
   const [running, setRunning] = useState(false);
   const [addingModel, setAddingModel] = useState(false);
   const [synthesis, setSynthesis] = useState<Answer | null>(null);
-  const [judge, setJudge] = useState<{ backend: "ollama" | "llamacpp"; modelId: string } | null>(null);
+  const [judge, setJudge] = useState<{ backend: ChatBackend; modelId: string } | null>(null);
   const abortsRef = useRef<AbortController[]>([]);
   const stoppedRef = useRef(false);
 
@@ -107,7 +107,7 @@ export default function CouncilPage() {
     setParticipants((prev) => prev.filter((p) => p.key !== key));
   }
 
-  function addModel(v: { backend: "ollama" | "llamacpp"; modelId: string; label: string }) {
+  function addModel(v: { backend: ChatBackend; modelId: string; label: string }) {
     const key = `model:${v.backend}:${v.modelId}`;
     setParticipants((prev) =>
       prev.some((p) => p.key === key)

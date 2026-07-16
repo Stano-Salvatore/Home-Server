@@ -3,11 +3,12 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { ModelPicker } from "@/components/chat/model-picker";
+import type { ChatBackend } from "@/lib/types";
 
 export function TaskForm({ onCreated }: { onCreated: () => void }) {
   const [name, setName] = useState("");
   const [prompt, setPrompt] = useState("");
-  const [model, setModel] = useState<{ backend: "ollama" | "llamacpp"; modelId: string } | null>(
+  const [model, setModel] = useState<{ backend: ChatBackend; modelId: string } | null>(
     null,
   );
   const [triggerType, setTriggerType] = useState<"manual" | "cron" | "file_watch">("manual");

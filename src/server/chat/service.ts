@@ -2,7 +2,7 @@ import { eq, desc } from "drizzle-orm";
 import { db } from "@/server/db/client";
 import { conversations, messages } from "@/server/db/schema";
 import { backendFor } from "@/server/backends/registry";
-import type { ChatMessage } from "@/server/backends/types";
+import type { ChatMessage, BackendKind } from "@/server/backends/types";
 import { newId } from "@/server/util/hash";
 import { listMemoryFacts } from "@/server/brain/memory";
 
@@ -29,7 +29,7 @@ export function getConversation(id: string) {
 }
 
 export function createConversation(opts: {
-  backend: "ollama" | "llamacpp";
+  backend: BackendKind;
   modelId: string;
   title?: string;
   systemPrompt?: string;
@@ -446,7 +446,7 @@ async function* streamAssistant(
   // litert-lm the CPU prefill after this line is the longest silent phase.
   yield { status: "writing a reply…" };
 
-  const backend = backendFor(conversation.backend as "ollama" | "llamacpp");
+  const backend = backendFor(conversation.backend as BackendKind);
   let full = "";
   let reportedTokenCount: number | undefined;
   let stats: GenStats | undefined;

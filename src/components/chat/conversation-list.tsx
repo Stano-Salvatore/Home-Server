@@ -6,6 +6,7 @@ import { Plus, Search, Pencil, Trash2, Check, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ModelPicker } from "./model-picker";
 import { useSidebarCollapsed } from "@/lib/useSidebarCollapsed";
+import type { ChatBackend } from "@/lib/types";
 
 type Conversation = {
   id: string;
@@ -18,7 +19,7 @@ type Conversation = {
 export function ConversationList() {
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [creating, setCreating] = useState(false);
-  const [pending, setPending] = useState<{ backend: "ollama" | "llamacpp"; modelId: string } | null>(
+  const [pending, setPending] = useState<{ backend: ChatBackend; modelId: string } | null>(
     null,
   );
   const [query, setQuery] = useState("");
