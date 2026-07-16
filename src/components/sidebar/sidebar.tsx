@@ -98,8 +98,8 @@ export function Sidebar() {
         <button onClick={() => setOpen(true)} aria-label="Open menu" className="p-1 text-ink">
           <Menu size={20} />
         </button>
-        <span className="text-[15px] font-semibold tracking-tight text-ink flex items-center gap-1.5">
-          <span className="text-accent">◢</span> home_server
+        <span className="text-[15px] font-semibold tracking-tight text-accent flex items-center gap-1.5">
+          <span aria-hidden>◢</span> Nedory
         </span>
       </div>
 
@@ -119,11 +119,11 @@ export function Sidebar() {
       >
         <div className="px-2 mb-6 flex items-start justify-between">
           <div>
-            <div className="text-[15px] font-semibold tracking-tight text-ink flex items-center gap-1.5">
-              <span className="text-accent">◢</span> home_server
+            <div className="text-[15px] font-semibold tracking-tight text-accent flex items-center gap-1.5">
+              <span aria-hidden>◢</span> Nedory
             </div>
             <div className="text-[11px] text-ink-dim mt-0.5">
-              <span className="text-accent">~</span> local ai workspace
+              <span className="text-accent">~</span> yours, fully local
             </div>
           </div>
           <button

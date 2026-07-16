@@ -4,8 +4,7 @@ import { useEffect, useRef, useState, use as usePromise } from "react";
 import { useChatStream } from "@/lib/useChatStream";
 import { MessageBubble } from "@/components/chat/message-bubble";
 import { ModelPicker } from "@/components/chat/model-picker";
-import { Button } from "@/components/ui/button";
-import { Send, Square, RefreshCw } from "lucide-react";
+import { ArrowUp, Square, RefreshCw } from "lucide-react";
 
 type Conversation = {
   id: string;
@@ -39,7 +38,18 @@ export default function ConversationPage({ params }: { params: Promise<{ id: str
     fetch("/api/brain/scopes")
       .then((r) => r.json())
       .then((d) => setScopes(d.scopes ?? []));
-    loadHistory(id);
+    loadHistory(id).then(() => {
+      // A first message typed into the /chat landing composer is handed over
+      // via sessionStorage — the stream has to run in this page, which owns it.
+      const draftKey = `nedory-draft-${id}`;
+      const draft = sessionStorage.getItem(draftKey);
+      if (draft) {
+        sessionStorage.removeItem(draftKey);
+        void send(draft);
+      }
+    });
+    // `send` is stable per conversation id (useCallback on conversationId).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id, loadHistory]);
 
   useEffect(() => {
@@ -157,29 +167,44 @@ export default function ConversationPage({ params }: { params: Promise<{ id: str
 
       {error && <p className="px-5 text-xs text-red-400">{error}</p>}
 
-      <div className="border-t border-neutral-900 p-4 flex gap-2">
-        <textarea
-          className="flex-1 resize-none rounded-md bg-[var(--surface-2)] border border-[var(--border)] px-3 py-2 text-sm text-ink focus:outline-none focus:border-accent"
-          rows={2}
-          placeholder="Message…"
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter" && !e.shiftKey) {
-              e.preventDefault();
-              handleSend();
-            }
-          }}
-        />
-        {streaming ? (
-          <Button variant="danger" onClick={stop}>
-            <Square size={14} /> Stop
-          </Button>
-        ) : (
-          <Button onClick={handleSend} disabled={!input.trim()}>
-            <Send size={14} /> Send
-          </Button>
-        )}
+      <div className="p-4 pt-2">
+        <div
+          className="rounded-xl border flex items-end gap-2 px-4 py-3"
+          style={{ background: "var(--surface)", borderColor: "var(--border)" }}
+        >
+          <textarea
+            className="flex-1 resize-none bg-transparent text-sm text-ink placeholder:text-ink-dim focus:outline-none"
+            rows={2}
+            placeholder="Message Nedory …"
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && !e.shiftKey) {
+                e.preventDefault();
+                handleSend();
+              }
+            }}
+          />
+          {streaming ? (
+            <button
+              onClick={stop}
+              aria-label="Stop"
+              className="rounded-lg border p-2 text-term-red hover:text-ink transition-colors"
+              style={{ borderColor: "var(--border)" }}
+            >
+              <Square size={16} />
+            </button>
+          ) : (
+            <button
+              onClick={handleSend}
+              disabled={!input.trim()}
+              aria-label="Send"
+              className="rounded-lg bg-accent text-black p-2 disabled:opacity-40 hover:bg-accent-hover transition-colors"
+            >
+              <ArrowUp size={16} strokeWidth={2.5} />
+            </button>
+          )}
+        </div>
       </div>
     </div>
   );
