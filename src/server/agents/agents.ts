@@ -13,9 +13,14 @@ export type Agent = {
   scopeId?: string | null; // Brain scope this agent is limited to (a custom-node id)
   // Lightweight context bridge: a GET endpoint this agent's replies pull live
   // data from (e.g. a health-tracking API), injected as system context each
-  // turn. This is a one-shot HTTP fetch, not a full MCP tool-calling client.
+  // turn. This is a one-shot HTTP fetch — no tool discovery, no selection.
   contextUrl?: string | null;
   contextToken?: string | null; // sent as `Authorization: Bearer <token>`
+  // Full MCP tool calling: built-in Nedory tools are always included when
+  // this is on; mcpServers are additional Streamable-HTTP MCP endpoints
+  // whose tools get discovered and made selectable each turn.
+  toolsEnabled?: boolean;
+  mcpServers?: { id: string; name: string; url: string; token?: string | null }[];
 };
 
 const AGENTS_KEY = "agents";

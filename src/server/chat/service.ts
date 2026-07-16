@@ -402,6 +402,40 @@ async function* streamAssistant(
     }
   }
 
+  // MCP tool calling: built-in Nedory tools (node status, hardware, service
+  // health) plus whatever this agent's configured MCP servers expose. One
+  // small-model planning call decides which (if any) are relevant, Nedory
+  // executes them directly — no multi-turn tool loop, which doesn't hold up
+  // on local 2-8B models. Any failure at any stage just means no tool
+  // context gets added; it never blocks or breaks the reply.
+  if (agent?.toolsEnabled) {
+    try {
+      const { buildToolContext } = await import("@/server/tools/registry");
+      const toolCtx = await buildToolContext(agent);
+      if (toolCtx) {
+        yield { status: `${agent.name} is checking its tools…` };
+        const { planToolCalls } = await import("@/server/tools/planner");
+        const calls = await planToolCalls(userContent, toolCtx.tools);
+        if (calls.length > 0) {
+          const results = await Promise.all(
+            calls.map(async (c, i) => {
+              const output = await toolCtx.call(c.tool, c.args);
+              return `[T${i + 1}] ${c.tool}(${JSON.stringify(c.args)}):\n${output}`;
+            }),
+          );
+          chatMessages.push({
+            role: "system",
+            content:
+              `Live tool results fetched just now for this question — treat them as current ` +
+              `ground truth, and cite as [Tn]:\n\n${results.join("\n\n")}`,
+          });
+        }
+      }
+    } catch (err) {
+      console.error("[chat] tool calling failed:", err);
+    }
+  }
+
   const citations: Citation[] | undefined = citationList.length > 0 ? citationList : undefined;
 
   for (const m of history) {
