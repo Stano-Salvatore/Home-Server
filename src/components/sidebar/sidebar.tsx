@@ -84,9 +84,31 @@ function StatusRow() {
   );
 }
 
+const COLLAPSED_KEY = "nedory-sidebar-collapsed";
+
 export function Sidebar() {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
+  // Desktop-only: the rail slides away entirely, Odysseus-style, leaving a
+  // floating hamburger to bring it back. Mobile keeps the off-canvas drawer.
+  const [collapsed, setCollapsed] = useState(false);
+
+  // Restore the last choice after hydration (server HTML can't know it).
+  useEffect(() => {
+    const t = setTimeout(() => {
+      if (localStorage.getItem(COLLAPSED_KEY) === "1") setCollapsed(true);
+    }, 0);
+    return () => clearTimeout(t);
+  }, []);
+
+  function setCollapsedPersistent(next: boolean) {
+    setCollapsed(next);
+    try {
+      localStorage.setItem(COLLAPSED_KEY, next ? "1" : "0");
+    } catch {
+      // private mode etc. — the toggle still works for this visit
+    }
+  }
 
   return (
     <>
@@ -111,19 +133,42 @@ export function Sidebar() {
         />
       )}
 
+      {/* Floating reopen button once the desktop rail has slid away. */}
+      {collapsed && (
+        <button
+          onClick={() => setCollapsedPersistent(false)}
+          aria-label="Open sidebar"
+          className="hidden md:flex fixed top-3 left-3 z-30 p-1.5 rounded-md border text-ink-dim hover:text-ink"
+          style={{ background: "var(--surface)", borderColor: "var(--border)" }}
+        >
+          <Menu size={18} />
+        </button>
+      )}
+
       <nav
-        className={`w-56 shrink-0 h-screen border-r flex flex-col py-4 px-3 z-50 fixed md:sticky top-0 left-0 transition-transform duration-200 ${
+        // left-0 must not reach desktop: `sticky left-0` horizontally re-pins
+        // the rail to the viewport edge, cancelling the -ml-56 slide-away.
+        className={`w-56 shrink-0 h-screen border-r flex flex-col py-4 px-3 z-50 fixed md:sticky top-0 left-0 md:left-auto transition-all duration-200 ${
           open ? "translate-x-0" : "-translate-x-full"
-        } md:translate-x-0`}
+        } md:translate-x-0 ${collapsed ? "md:-ml-56" : "md:ml-0"}`}
         style={{ background: "var(--surface)", borderColor: "var(--border)" }}
       >
         <div className="px-2 mb-6 flex items-start justify-between">
-          <div>
-            <div className="text-[15px] font-semibold tracking-tight text-accent flex items-center gap-1.5">
-              <span aria-hidden>◢</span> Nedory
-            </div>
-            <div className="text-[11px] text-ink-dim mt-0.5">
-              <span className="text-accent">~</span> yours, fully local
+          <div className="flex items-start gap-2.5">
+            <button
+              onClick={() => setCollapsedPersistent(true)}
+              aria-label="Collapse sidebar"
+              className="hidden md:block p-0.5 mt-0.5 text-ink-dim hover:text-ink"
+            >
+              <Menu size={17} />
+            </button>
+            <div>
+              <div className="text-[15px] font-semibold tracking-tight text-accent flex items-center gap-1.5">
+                <span aria-hidden>◢</span> Nedory
+              </div>
+              <div className="text-[11px] text-ink-dim mt-0.5">
+                <span className="text-accent">~</span> yours, fully local
+              </div>
             </div>
           </div>
           <button
