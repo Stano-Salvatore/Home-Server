@@ -13,22 +13,22 @@ const NAME = "Salvatore";
 const GREETINGS: Record<"morning" | "day" | "evening" | "night", string[]> = {
   morning: [
     `Mornin', ${NAME}.`,
-    `Dobré ráno, ${NAME}.`,
+    `Rise and shine, ${NAME}.`,
     "Coffee first, questions after.",
     "Early start, captain?",
-    `Fresh day, fresh context window.`,
+    "Fresh day, fresh context window.",
   ],
   day: [
     `Afternoon, ${NAME}.`,
     "What are we building today?",
-    `Dobrý deň, ${NAME}.`,
+    `Good to see you, ${NAME}.`,
     "The fleet is listening.",
     "Back at it, I see.",
   ],
   evening: [
     `Evening, ${NAME}.`,
     "Golden hour for good questions.",
-    `Dobrý večer, ${NAME}.`,
+    `Winding down, ${NAME}?`,
     "One more idea before dinner?",
     "The library is open late.",
   ],
@@ -37,7 +37,7 @@ const GREETINGS: Record<"morning" | "day" | "evening" | "night", string[]> = {
     `Still up, ${NAME}?`,
     "The best ideas keep odd hours.",
     "Quiet house, loud thoughts.",
-    `Nespíš, ${NAME}?`,
+    `Can't sleep, ${NAME}?`,
   ],
 };
 
