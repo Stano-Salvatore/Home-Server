@@ -7,6 +7,48 @@ import { ModelPicker } from "@/components/chat/model-picker";
 
 const LAST_MODEL_KEY = "nedory-last-model";
 
+// claude.ai-style rotating welcome: a different line every visit, aware of
+// the hour. Change NAME once to be greeted differently everywhere.
+const NAME = "Salvatore";
+const GREETINGS: Record<"morning" | "day" | "evening" | "night", string[]> = {
+  morning: [
+    `Mornin', ${NAME}.`,
+    `Dobré ráno, ${NAME}.`,
+    "Coffee first, questions after.",
+    "Early start, captain?",
+    `Fresh day, fresh context window.`,
+  ],
+  day: [
+    `Afternoon, ${NAME}.`,
+    "What are we building today?",
+    `Dobrý deň, ${NAME}.`,
+    "The fleet is listening.",
+    "Back at it, I see.",
+  ],
+  evening: [
+    `Evening, ${NAME}.`,
+    "Golden hour for good questions.",
+    `Dobrý večer, ${NAME}.`,
+    "One more idea before dinner?",
+    "The library is open late.",
+  ],
+  night: [
+    "Night owl.",
+    `Still up, ${NAME}?`,
+    "The best ideas keep odd hours.",
+    "Quiet house, loud thoughts.",
+    `Nespíš, ${NAME}?`,
+  ],
+};
+
+function pickGreeting(): string {
+  const h = new Date().getHours();
+  const bucket =
+    h >= 5 && h < 11 ? "morning" : h >= 11 && h < 17 ? "day" : h >= 17 && h < 22 ? "evening" : "night";
+  const pool = GREETINGS[bucket];
+  return pool[Math.floor(Math.random() * pool.length)];
+}
+
 export default function ChatIndexPage() {
   const router = useRouter();
   const [input, setInput] = useState("");
@@ -14,6 +56,14 @@ export default function ChatIndexPage() {
   const [brain, setBrain] = useState(false);
   const [wiki, setWiki] = useState(false);
   const [starting, setStarting] = useState(false);
+  const [greeting, setGreeting] = useState("");
+
+  // Random + clock-dependent, so it must be picked after hydration — the
+  // server-rendered HTML can't know the phone's hour (or the dice roll).
+  useEffect(() => {
+    const t = setTimeout(() => setGreeting(pickGreeting()), 0);
+    return () => clearTimeout(t);
+  }, []);
 
   // Preselect whatever model the last chat was started with. Deferred a tick
   // so the server-rendered markup (no localStorage) hydrates cleanly before
@@ -61,7 +111,8 @@ export default function ChatIndexPage() {
         <h1 className="text-3xl font-semibold tracking-tight text-accent flex items-center gap-2">
           <span aria-hidden>◢</span> Nedory
         </h1>
-        <p className="text-sm text-ink-dim">yours, fully local.</p>
+        {/* min-height keeps the hero from jumping when the greeting lands */}
+        <p className="text-base text-ink min-h-[1.5rem]">{greeting}</p>
         <p className="text-[11px] text-ink-dim opacity-60 max-w-xs">
           Tip: enable Brain to answer from your notes and library.
         </p>
