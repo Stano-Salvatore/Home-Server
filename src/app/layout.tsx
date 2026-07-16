@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import { Sidebar } from "@/components/sidebar/sidebar";
+import { RegisterServiceWorker } from "@/components/pwa/register-sw";
 
 export const metadata: Metadata = {
   title: "Home Server",
@@ -18,7 +19,10 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: "#0b0c0e",
+  // Matches globals.css's --bg — was #0b0c0e (the pre-Odysseus-theme
+  // background), left stale by that pass; drives the Android status bar
+  // tint and PWA splash screen background.
+  themeColor: "#0a0d11",
   width: "device-width",
   initialScale: 1,
 };
@@ -31,6 +35,7 @@ export default function RootLayout({
   return (
     <html lang="en" className="h-full antialiased">
       <body className="min-h-full h-full flex text-ink" style={{ background: "var(--bg)" }}>
+        <RegisterServiceWorker />
         <Sidebar />
         <main className="flex-1 min-w-0 h-screen overflow-y-auto pt-12 md:pt-0">{children}</main>
       </body>
