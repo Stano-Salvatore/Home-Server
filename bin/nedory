@@ -33,10 +33,15 @@ done
 # Optional per-device config (S21_SSH, S21_OLLAMA, S21_KIWIX, etc.).
 [ -f "$ROOT/.nedory.env" ] && . "$ROOT/.nedory.env"
 
+# Fixed name so re-running `nedory` always finds (and replaces) the same
+# session instead of piling up duplicates.
+TMUX_SESSION="nedory"
+
 # Stop whatever is serving on :3000. Next spawns a child `next-server` that
 # actually holds the socket, so killing only `next start` leaves the port taken
 # (hello, EADDRINUSE). Kill both, and fall back to freeing the port directly.
 stop_running() {
+  command -v tmux >/dev/null 2>&1 && tmux kill-session -t "$TMUX_SESSION" 2>/dev/null || true
   pkill -f "next start"  2>/dev/null || true
   pkill -f "next-server" 2>/dev/null || true
   command -v fuser >/dev/null 2>&1 && fuser -k 3000/tcp 2>/dev/null || true
@@ -107,4 +112,23 @@ fi
 
 stop_running   # free the port so this run replaces any old instance
 echo "◢ Nedory online  →  http://localhost:3000"
-exec npm run start
+
+if command -v tmux >/dev/null 2>&1; then
+  # Detached tmux session, not a bare foreground `exec`: every scheduled Task
+  # (Tasks page → cron/file-watch) runs through node-cron timers living
+  # inside this same long-running process, so it has to survive the terminal
+  # losing focus or being closed — exactly the reliability problem tmux
+  # already solves for litert-lm serve elsewhere in this fleet. A bare `exec`
+  # ties the dashboard's lifetime to whatever single terminal tab happened to
+  # invoke `nedory`; termux-wake-lock alone doesn't prevent Android from
+  # backgrounding/killing that tab, which is why scheduled Tasks can look
+  # like they work during a live test (screen on, Termux frontmost) and then
+  # silently never fire once the phone actually locks.
+  tmux new-session -d -s "$TMUX_SESSION" "cd '$ROOT' && exec npm run start"
+  echo "  running in tmux session '$TMUX_SESSION' — reattach any time with: tmux attach -t $TMUX_SESSION"
+else
+  echo "  ⚠ tmux not found — running in the foreground of this shell instead."
+  echo "    Scheduled Tasks need this process to keep running in the background:"
+  echo "    pkg install tmux, then run nedory again — otherwise keep this session open."
+  exec npm run start
+fi
