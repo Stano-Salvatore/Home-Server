@@ -142,6 +142,7 @@ export default function ChatIndexPage() {
           <ModelPicker
             value={model as { backend: ChatBackend; modelId: string } | null}
             onChange={(v) => setModel({ backend: v.backend, modelId: v.modelId })}
+            autoDefault
           />
         </div>
         <div className="flex items-center justify-between px-3 pb-3 pt-2">

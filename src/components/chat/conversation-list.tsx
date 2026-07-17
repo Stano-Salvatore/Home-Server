@@ -103,7 +103,7 @@ export function ConversationList() {
         </Button>
       ) : (
         <div className="flex flex-col gap-2 border border-neutral-800 rounded-md p-2">
-          <ModelPicker value={pending} onChange={(v) => setPending(v)} />
+          <ModelPicker value={pending} onChange={(v) => setPending(v)} autoDefault />
           <div className="flex gap-2">
             <Button onClick={createConversation} disabled={!pending}>
               Start
