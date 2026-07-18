@@ -93,9 +93,16 @@ export function ConversationList() {
 
   return (
     <div
-      className={`w-64 shrink-0 border-r border-neutral-900 h-full flex flex-col p-3 gap-2 transition-all duration-200 ${
+      // relative + z-20: the chat column next to it is viewport-fixed and
+      // centered independent of this list's width (see chat/layout.tsx), so
+      // its box can extend underneath this list. A higher z-index (plus an
+      // opaque background, since this is otherwise a transparent flex child)
+      // keeps this list painting and receiving clicks on top wherever they
+      // overlap, instead of the centered pane winning hit-testing.
+      className={`relative z-20 w-64 shrink-0 border-r border-neutral-900 h-full flex flex-col p-3 gap-2 transition-all duration-200 ${
         collapsed ? "md:-ml-64 md:invisible" : ""
       }`}
+      style={{ background: "var(--bg)" }}
     >
       {!creating ? (
         <Button variant="secondary" onClick={() => setCreating(true)}>

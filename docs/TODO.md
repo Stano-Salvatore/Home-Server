@@ -75,6 +75,11 @@ RAG, research, tasks — fully alone.
 - [ ] **DB backup routine** (§8) — nightly `sqlite3 .backup` task, copy to
       Lenovo; eat our own dogfood (it's literally a Task)
 - [ ] Task run history cap (keep last N per task)
+- [ ] **ConversationList has no mobile collapse** — its collapse toggle button
+      is `hidden md:block` (desktop-only), so on phones it always reserves
+      16rem of an often ~400px-wide screen; the chat column recovers cleanly
+      now (§ chat centering fix) but the list itself still can't be dismissed
+      on a phone
 
 ## Ideas — bigger swings / someday
 
