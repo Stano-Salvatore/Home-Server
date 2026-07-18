@@ -28,6 +28,12 @@ RAG, research, tasks — fully alone.
 
 ## Now — on-device shakedown (after `git pull` on the branch)
 
+- [ ] **Voice loop on the S21** (`docs/voice-loop.md`) — build whisper.cpp,
+      install `bin/nedory-voice`, set `NEDORY_URL` in `~/.nedory-voice.env`,
+      run `nedory-voice ask` first (proves the pipeline), then `nedory-voice
+      listen` for hands-free "Hey Nedory". Tune `WAKE_WORDS` against
+      whatever whisper actually transcribes it as. Untested on real
+      hardware — report back what breaks.
 - [ ] `pkg install tmux` if missing, then `nedory stop && nedory` — confirm it
       prints the tmux session line and `tmux attach -t nedory` shows the app
 - [ ] Vault rescan once (Settings) — picks up the chunk cleaner re-ingest
@@ -111,6 +117,26 @@ RAG, research, tasks — fully alone.
       harnesses (§6.9)
 - [ ] croner instead of node-cron (timezone-safe, exposes missed-run info)
 - [ ] ntfy.sh for cross-device push (phone → other devices)
+- [ ] **Home Assistant automations** (voice-loop plan, Phase 1) — AC on
+      weather-forecast + time + temperature; vacuum on phone-leaves-home-zone
+      + 10min delay. Pure HA config, no LLM, no Nedory code — the only gap is
+      getting the robot vacuum into HA at all.
+- [ ] **Real wake-word engine** (voice-loop plan, Phase 4 upgrade) — swap
+      `bin/nedory-voice`'s whisper-polling wake detection (works, but
+      battery-hungry and prone to false triggers on noise) for a proper
+      always-on wake-word model. Porcupine's Python SDK is the obvious
+      candidate but ships a binary built for glibc; Termux runs on Android's
+      bionic libc, so it's untested whether `pip install pvporcupine` even
+      loads there — try it, and fall back to a native Android app (the
+      original plan's approach) only if it doesn't.
+- [ ] **Voice loop moves to the OptiPlex** (voice-loop plan, Phase 5) — once
+      it lands, move whisper.cpp (and ideally Nedory's own brain) off the
+      S21 onto real hardware; the S21 becomes purely mic+speakers+wake-word.
+- [ ] **Nedory writes Home Assistant automations** (voice-loop plan, Phase
+      5) — natural language → generated HA automation YAML, via an MCP-style
+      tool once Nedory-as-MCP-server (above) exists.
+- [ ] **mobile-use for in-app control** (voice-loop plan, Phase 5) — agent
+      drives Android apps via ADB for things HA can't reach.
 
 ## Rejected (don't re-litigate without new facts — CODEX §4.1)
 
