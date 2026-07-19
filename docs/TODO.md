@@ -195,13 +195,19 @@ RAG, research, tasks — fully alone.
       on-device: whisper's tiny model transcribed "Hey Nedory" as "Nederi"
       consistently, and ~10 added `WAKE_WORDS` mishearing-variants still
       didn't reliably catch it) for a proper always-on wake-word model.
-      **Porcupine's Python SDK is a confirmed dead end on Termux** — not a
-      binary-load failure, `pvporcupine` explicitly checks
+      **Both Porcupine and openWakeWord are confirmed dead ends on Termux —
+      don't re-try either.** Porcupine (`pvporcupine`) explicitly checks
       `platform.system()` and raises `ValueError: Unsupported system
-      'Android'.` outright. Don't re-try this path. A native Android app is
-      the real fix — parked until the OptiPlex/PC arrives (below), at which
-      point the voice loop moving off the S21 entirely may make this whole
-      question moot anyway.
+      'Android'.` outright. openWakeWord isn't OS-gated, but its inference
+      backends are: `pip install onnxruntime` and `pip install
+      tflite-runtime` both fail with "no matching distribution" — Termux/
+      Android aarch64 has no prebuilt wheel for either ML runtime, so *no*
+      Python wake-word library can work here regardless of the library
+      itself (this is a real platform-level gap, not one library's fault —
+      confirmed by two independent libraries hitting it from different
+      angles). A native Android app is the real fix — parked until the
+      OptiPlex/PC arrives (below), at which point the voice loop moving off
+      the S21 entirely may make this whole question moot anyway.
 - [ ] **Voice loop moves to the OptiPlex** (voice-loop plan, Phase 5) — once
       it lands, move whisper.cpp (and ideally Nedory's own brain) off the
       S21 onto real hardware; the S21 becomes purely mic+speakers+wake-word.
