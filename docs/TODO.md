@@ -107,8 +107,19 @@ RAG, research, tasks — fully alone.
       with zero errors, zero warnings. All 8 modules re-verified end-to-end
       (create/read/update/delete) against the real dashboard after the
       refactor, not just typecheck.
-- [ ] **DB backup routine** (§8) — nightly `sqlite3 .backup` task, copy to
-      Lenovo; eat our own dogfood (it's literally a Task)
+- [x] **DB backup routine** (§8) — nightly (3am) `VACUUM INTO` snapshot
+      (SQLite's own atomic backup mechanism, safer than a plain file copy
+      against a live WAL-mode DB), 14-day retention, manual "Back up now"
+      button in Settings. Not a user-facing Task (that would've needed a
+      new non-LLM task type) — a fixed cron registered at boot instead,
+      same node-cron infrastructure. Verified: valid/complete SQLite
+      output confirmed by reopening and querying it, and pruning tested
+      directly (seeded 16 extra files, confirmed exactly the 14 newest
+      survived a further backup).
+      **Not done: "copy to Lenovo"** — `dbBackupDir` can point at any
+      mounted path (e.g. an SSHFS mount to the Lenovo), but there's no
+      built-in remote-transfer client. Mount a network path there, or
+      pull the backups from `data/backups` some other way.
 - [x] Task run history cap (last 50 per task, pruned after every run)
 - [x] **ConversationList has no mobile collapse** — real S25 testing (not
       just desktop-width Playwright) caught this live: the chat column's

@@ -53,6 +53,11 @@ const AppConfigSchema = z.object({
   // optional integration here.
   homeAssistantUrl: z.string().default(""),
   homeAssistantToken: z.string().default(""),
+  // Where nightly DB backups land. Blank = data/backups next to the DB
+  // itself. Point this at a mounted network share (e.g. SSHFS to the
+  // Lenovo) to get them off-device without building a bespoke transfer
+  // client here.
+  dbBackupDir: z.string().default(""),
 });
 
 export type AppConfig = z.infer<typeof AppConfigSchema>;
@@ -97,6 +102,7 @@ const ENV_DEFAULTS: Record<keyof AppConfig, string | undefined> = {
   braveApiKey: process.env.BRAVE_API_KEY,
   homeAssistantUrl: process.env.HOME_ASSISTANT_URL,
   homeAssistantToken: process.env.HOME_ASSISTANT_TOKEN,
+  dbBackupDir: process.env.DB_BACKUP_DIR,
 };
 
 function getRaw(key: string): string | undefined {

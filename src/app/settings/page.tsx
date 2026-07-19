@@ -25,6 +25,7 @@ type Config = {
   braveApiKey: string;
   homeAssistantUrl: string;
   homeAssistantToken: string;
+  dbBackupDir: string;
 };
 
 type Status = Record<"vaultPath" | "libraryPath" | "uploadsPath", { exists: boolean; writable: boolean }>;
@@ -50,6 +51,7 @@ const FIELDS: { key: keyof Config; label: string; hint: string }[] = [
   { key: "braveApiKey", label: "Brave Search API key (optional)", hint: "Only needed when the web search provider is Brave" },
   { key: "homeAssistantUrl", label: "Home Assistant URL (optional)", hint: "e.g. http://<lenovo-ip>:8123 — enables the home_assistant_* tools for any agent (and voice) with tool calling on" },
   { key: "homeAssistantToken", label: "Home Assistant long-lived access token (optional)", hint: "Home Assistant → your profile → Security → Long-Lived Access Tokens" },
+  { key: "dbBackupDir", label: "DB backup folder (optional)", hint: "Blank = data/backups next to the database. Point at a mounted network share to get nightly backups off-device." },
 ];
 
 export default function SettingsPage() {
@@ -60,6 +62,8 @@ export default function SettingsPage() {
   const [savedAt, setSavedAt] = useState<number | null>(null);
   const [reindexing, setReindexing] = useState(false);
   const [reindexMsg, setReindexMsg] = useState<string | null>(null);
+  const [backingUp, setBackingUp] = useState(false);
+  const [backupMsg, setBackupMsg] = useState<string | null>(null);
 
   useEffect(() => {
     fetch("/api/settings")
@@ -109,6 +113,20 @@ export default function SettingsPage() {
       setReindexMsg(err instanceof Error ? err.message : String(err));
     } finally {
       setReindexing(false);
+    }
+  }
+
+  async function backupNow() {
+    setBackingUp(true);
+    setBackupMsg(null);
+    try {
+      const res = await fetch("/api/backup", { method: "POST" });
+      const d = await res.json();
+      setBackupMsg(d.error ?? `Backed up to ${d.path}`);
+    } catch (err) {
+      setBackupMsg(err instanceof Error ? err.message : String(err));
+    } finally {
+      setBackingUp(false);
     }
   }
 
@@ -196,6 +214,17 @@ export default function SettingsPage() {
               )}
               {key === "embeddingModel" && reindexMsg && (
                 <p className="text-xs text-ink-dim mt-1">{reindexMsg}</p>
+              )}
+              {key === "dbBackupDir" && (
+                <div className="flex items-center gap-3 mt-2">
+                  <Button variant="secondary" onClick={backupNow} disabled={backingUp}>
+                    {backingUp ? "Backing up…" : "Back up now"}
+                  </Button>
+                  <span className="text-xs text-ink-dim">Also runs automatically every night at 3am.</span>
+                </div>
+              )}
+              {key === "dbBackupDir" && backupMsg && (
+                <p className="text-xs text-ink-dim mt-1">{backupMsg}</p>
               )}
             </div>
           );
