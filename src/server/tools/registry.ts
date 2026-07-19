@@ -1,6 +1,6 @@
 import type { Agent } from "@/server/agents/agents";
 import { mcpConnect, mcpListTools, mcpCallTool, type McpSession } from "@/server/mcp/client";
-import { BUILTIN_TOOLS } from "./builtin";
+import { getBuiltinTools } from "./builtin";
 import type { ToolDef } from "./types";
 
 export type ToolContext = {
@@ -24,9 +24,10 @@ function qualify(serverId: string, toolName: string): string {
 export async function buildToolContext(agent: Agent): Promise<ToolContext | null> {
   if (!agent.toolsEnabled) return null;
 
-  const defs: ToolDef[] = [...BUILTIN_TOOLS.map(({ name, description }) => ({ name, description }))];
+  const builtins = getBuiltinTools();
+  const defs: ToolDef[] = [...builtins.map(({ name, description }) => ({ name, description }))];
   const dispatch = new Map<string, (args: Record<string, unknown>) => Promise<string>>();
-  for (const t of BUILTIN_TOOLS) dispatch.set(t.name, t.call);
+  for (const t of builtins) dispatch.set(t.name, t.call);
 
   const servers = agent.mcpServers ?? [];
   const sessions = await Promise.allSettled(

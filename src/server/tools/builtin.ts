@@ -1,15 +1,16 @@
 import { probeNodes } from "@/server/backends/registry";
 import { getHardware } from "@/server/hardware/scan";
 import { probeServices } from "@/server/nodes/services";
-import type { ToolDef } from "./types";
+import { HOME_ASSISTANT_TOOLS, homeAssistantConfigured } from "./homeassistant";
+import type { BuiltinTool } from "./types";
 
-export type BuiltinTool = ToolDef & { call: (args: Record<string, unknown>) => Promise<string> };
+export type { BuiltinTool };
 
 // Nedory's own dashboard state, exposed as tools — no network hop, no setup,
 // available to any agent with tool calling on. This is what gives Gemmi
 // (the "SysOps logging & precision" persona) something real to answer from,
 // with zero configuration.
-export const BUILTIN_TOOLS: BuiltinTool[] = [
+const NEDORY_BUILTIN_TOOLS: BuiltinTool[] = [
   {
     name: "nedory_node_status",
     description:
@@ -57,3 +58,11 @@ export const BUILTIN_TOOLS: BuiltinTool[] = [
     },
   },
 ];
+
+// A function, not a constant — Home Assistant is Settings-backed and can be
+// configured/unconfigured at runtime, so the tool list has to be recomputed
+// per call rather than fixed at module load.
+export function getBuiltinTools(): BuiltinTool[] {
+  if (!homeAssistantConfigured()) return NEDORY_BUILTIN_TOOLS;
+  return [...NEDORY_BUILTIN_TOOLS, ...HOME_ASSISTANT_TOOLS];
+}

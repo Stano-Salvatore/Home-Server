@@ -46,6 +46,13 @@ const AppConfigSchema = z.object({
   webSearchProvider: z.string().default("duckduckgo"),
   searxngUrl: z.string().default(""),
   braveApiKey: z.string().default(""),
+  // Home Assistant REST API — a long-lived access token from HA's own
+  // profile page (Settings → your profile → Long-Lived Access Tokens).
+  // Blank url or token = the home_assistant_* tools just don't appear in
+  // any tool-calling turn, same degrade-quietly pattern as every other
+  // optional integration here.
+  homeAssistantUrl: z.string().default(""),
+  homeAssistantToken: z.string().default(""),
 });
 
 export type AppConfig = z.infer<typeof AppConfigSchema>;
@@ -69,6 +76,8 @@ const ENV_DEFAULTS: Record<keyof AppConfig, string | undefined> = {
   webSearchProvider: process.env.WEB_SEARCH_PROVIDER,
   searxngUrl: process.env.SEARXNG_URL,
   braveApiKey: process.env.BRAVE_API_KEY,
+  homeAssistantUrl: process.env.HOME_ASSISTANT_URL,
+  homeAssistantToken: process.env.HOME_ASSISTANT_TOKEN,
 };
 
 function getRaw(key: string): string | undefined {

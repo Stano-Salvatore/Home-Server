@@ -7,3 +7,5 @@ export type ToolDef = {
 };
 
 export type ToolCall = { tool: string; args: Record<string, unknown> };
+
+export type BuiltinTool = ToolDef & { call: (args: Record<string, unknown>) => Promise<string> };

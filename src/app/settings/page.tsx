@@ -23,6 +23,8 @@ type Config = {
   webSearchProvider: string;
   searxngUrl: string;
   braveApiKey: string;
+  homeAssistantUrl: string;
+  homeAssistantToken: string;
 };
 
 type Status = Record<"vaultPath" | "libraryPath" | "uploadsPath", { exists: boolean; writable: boolean }>;
@@ -42,6 +44,8 @@ const FIELDS: { key: keyof Config; label: string; hint: string }[] = [
   { key: "wikipediaLangs", label: "Wikipedia languages", hint: "Comma-separated wiki codes, e.g. en,cs" },
   { key: "searxngUrl", label: "SearXNG URL (optional)", hint: "Self-hosted SearXNG instance for the web search provider, e.g. http://<lenovo-ip>:8888" },
   { key: "braveApiKey", label: "Brave Search API key (optional)", hint: "Only needed when the web search provider is Brave" },
+  { key: "homeAssistantUrl", label: "Home Assistant URL (optional)", hint: "e.g. http://<lenovo-ip>:8123 — enables the home_assistant_* tools for any agent (and voice) with tool calling on" },
+  { key: "homeAssistantToken", label: "Home Assistant long-lived access token (optional)", hint: "Home Assistant → your profile → Security → Long-Lived Access Tokens" },
 ];
 
 export default function SettingsPage() {
