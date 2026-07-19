@@ -1,4 +1,5 @@
-import { getSetting, setSetting, loadSettings } from "@/server/settings/config";
+import { getSetting, loadSettings } from "@/server/settings/config";
+import { writeJsonBlob } from "@/server/settings/jsonBlob";
 import { newId } from "@/server/util/hash";
 
 export type OllamaNode = { id: string; name: string; url: string };
@@ -11,6 +12,11 @@ function normalizeUrl(url: string): string {
   return u.replace(/\/$/, "");
 }
 
+// Not routed through readJsonBlob like the other collection modules: on a
+// missing/corrupt/empty stored value this needs to seed-and-persist a first
+// node from the legacy ollamaHost setting, not just return an empty
+// fallback — a genuinely different (seed-and-write) shape from a plain
+// read-with-fallback.
 export function listNodes(): OllamaNode[] {
   const raw = getSetting(NODES_KEY);
   if (raw) {
@@ -26,12 +32,12 @@ export function listNodes(): OllamaNode[] {
   const seeded: OllamaNode[] = [
     { id: newId("node"), name: "Local", url: normalizeUrl(loadSettings().ollamaHost) },
   ];
-  setSetting(NODES_KEY, JSON.stringify(seeded));
+  writeJsonBlob(NODES_KEY, seeded);
   return seeded;
 }
 
 function saveNodes(nodes: OllamaNode[]) {
-  setSetting(NODES_KEY, JSON.stringify(nodes));
+  writeJsonBlob(NODES_KEY, nodes);
 }
 
 export function getNode(id: string): OllamaNode | undefined {

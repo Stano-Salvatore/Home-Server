@@ -85,18 +85,25 @@ RAG, research, tasks — fully alone.
 - [x] **Write-only secrets** (§6.8) — braveApiKey/homeAssistantToken no
       longer round-trip through GET /api/settings (masked + a secretsSet
       map instead); an empty secret on save leaves the stored value alone
-- [ ] **Consolidation sweep** (§6.9, own PR, zero behavior change): one SSE
-      reader (6 copies today), one litertlm-JSON-call helper (3), one pill
-      chip component (5), one settings-collection helper (8); fix
-      graph-tab.tsx's 3 pre-existing lint errors
+- [x] **Consolidation sweep** (§6.9) — readSSE() (3 client-side copies →
+      1), litertlmCall() (3 copies → 1), PillToggle (7 copies → 1),
+      readJsonBlob()/writeJsonBlob() (8 settings-collection modules: custom
+      nodes/links, scopes, parent overrides, hub, agents, vaults, ollama
+      nodes — the latter two kept their legacy-setting seeding logic local,
+      only the parse/fallback core extracted); fixed graph-tab.tsx's 3
+      pre-existing lint errors + council's dead `options` state. Repo lints
+      with zero errors, zero warnings. All 8 modules re-verified end-to-end
+      (create/read/update/delete) against the real dashboard after the
+      refactor, not just typecheck.
 - [ ] **DB backup routine** (§8) — nightly `sqlite3 .backup` task, copy to
       Lenovo; eat our own dogfood (it's literally a Task)
 - [ ] Task run history cap (keep last N per task)
-- [ ] **ConversationList has no mobile collapse** — its collapse toggle button
-      is `hidden md:block` (desktop-only), so on phones it always reserves
-      16rem of an often ~400px-wide screen; the chat column recovers cleanly
-      now (§ chat centering fix) but the list itself still can't be dismissed
-      on a phone
+- [x] **ConversationList has no mobile collapse** — real S25 testing (not
+      just desktop-width Playwright) caught this live: the chat column's
+      mobile gutter was reserved space for a list that had no way to hide,
+      leaving a dead blank strip instead of centering. Fixed properly:
+      ConversationList is now an off-canvas drawer on mobile sharing
+      Sidebar's hamburger (useMobileNavOpen), gutter removed entirely.
 
 ## Ideas — bigger swings / someday
 

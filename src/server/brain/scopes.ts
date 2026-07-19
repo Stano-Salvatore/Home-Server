@@ -1,7 +1,7 @@
 import { like, or } from "drizzle-orm";
-import { getSetting, setSetting } from "@/server/settings/config";
 import { db } from "@/server/db/client";
 import { brainDocuments } from "@/server/db/schema";
+import { readJsonBlob, writeJsonBlob, isPlainObject } from "@/server/settings/jsonBlob";
 
 // A "scope" is a custom Brain node (from customNodes) with a set of member
 // documents. Pinning a conversation/agent to a scope limits retrieval to those
@@ -14,18 +14,11 @@ type Membership = Record<string, string[]>;
 const KEY = "brain_scope_members";
 
 function load(): Membership {
-  const raw = getSetting(KEY);
-  if (!raw) return {};
-  try {
-    const parsed = JSON.parse(raw) as Membership;
-    return parsed && typeof parsed === "object" ? parsed : {};
-  } catch {
-    return {};
-  }
+  return readJsonBlob<Membership>(KEY, {}, isPlainObject as (v: unknown) => v is Membership);
 }
 
 function save(m: Membership) {
-  setSetting(KEY, JSON.stringify(m));
+  writeJsonBlob(KEY, m);
 }
 
 export function getScopeMembers(scopeId: string): string[] {

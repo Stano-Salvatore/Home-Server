@@ -1,4 +1,5 @@
 import { getSetting, setSetting } from "@/server/settings/config";
+import { readJsonBlob, writeJsonBlob, isArray } from "@/server/settings/jsonBlob";
 import { newId } from "@/server/util/hash";
 
 export type Agent = {
@@ -142,20 +143,11 @@ export function migrateAthenaModelTag(installedTags: string[]) {
 }
 
 export function listAgents(): Agent[] {
-  const raw = getSetting(AGENTS_KEY);
-  if (raw) {
-    try {
-      const parsed = JSON.parse(raw) as Agent[];
-      if (Array.isArray(parsed)) return parsed;
-    } catch {
-      // fall through
-    }
-  }
-  return [];
+  return readJsonBlob<Agent[]>(AGENTS_KEY, [], isArray as (v: unknown) => v is Agent[]);
 }
 
 function saveAgents(agents: Agent[]) {
-  setSetting(AGENTS_KEY, JSON.stringify(agents));
+  writeJsonBlob(AGENTS_KEY, agents);
 }
 
 export function getAgent(id: string): Agent | undefined {
