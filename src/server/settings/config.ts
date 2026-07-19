@@ -57,6 +57,25 @@ const AppConfigSchema = z.object({
 
 export type AppConfig = z.infer<typeof AppConfigSchema>;
 
+// Fields that must never round-trip back through a GET — anyone who can
+// load the Settings page (or just hit the API — auth is opt-in and off by
+// default) could otherwise read live API keys/tokens back out in plaintext.
+export const SECRET_KEYS = ["braveApiKey", "homeAssistantToken"] as const satisfies readonly (keyof AppConfig)[];
+
+/** GET-safe copy: secret fields blanked. Pair with secretsPresence() so the
+ *  UI can still show "already set" without ever seeing the value itself. */
+export function maskSecrets(config: AppConfig): AppConfig {
+  const masked = { ...config };
+  for (const key of SECRET_KEYS) masked[key] = "";
+  return masked;
+}
+
+export function secretsPresence(config: AppConfig): Record<(typeof SECRET_KEYS)[number], boolean> {
+  const presence = {} as Record<(typeof SECRET_KEYS)[number], boolean>;
+  for (const key of SECRET_KEYS) presence[key] = config[key].length > 0;
+  return presence;
+}
+
 const ENV_DEFAULTS: Record<keyof AppConfig, string | undefined> = {
   vaultPath: process.env.VAULT_PATH,
   libraryPath: process.env.LIBRARY_PATH,
@@ -119,9 +138,17 @@ export function loadSettings(forceReload = false): AppConfig {
   return cachedConfig;
 }
 
+const SECRET_KEY_SET: ReadonlySet<string> = new Set(SECRET_KEYS);
+
 export function updateSettings(patch: Partial<AppConfig>): AppConfig {
   for (const [key, value] of Object.entries(patch)) {
-    if (value !== undefined) setSetting(key, String(value));
+    if (value === undefined) continue;
+    // GET never returns a real secret value (see maskSecrets), so an
+    // untouched secret field round-trips back as "" — treat that as "leave
+    // it alone" rather than clearing whatever's actually stored. Only a
+    // genuinely new (non-empty) value overwrites a secret.
+    if (SECRET_KEY_SET.has(key) && value === "") continue;
+    setSetting(key, String(value));
   }
   return loadSettings(true);
 }

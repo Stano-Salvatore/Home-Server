@@ -28,6 +28,10 @@ type Config = {
 };
 
 type Status = Record<"vaultPath" | "libraryPath" | "uploadsPath", { exists: boolean; writable: boolean }>;
+type SecretKey = "braveApiKey" | "homeAssistantToken";
+type SecretsSet = Record<SecretKey, boolean>;
+
+const SECRET_KEYS = new Set<string>(["braveApiKey", "homeAssistantToken"]);
 
 const FIELDS: { key: keyof Config; label: string; hint: string }[] = [
   { key: "libraryPath", label: "Library folder", hint: "Folder with your .epub / .pdf files" },
@@ -51,6 +55,7 @@ const FIELDS: { key: keyof Config; label: string; hint: string }[] = [
 export default function SettingsPage() {
   const [config, setConfig] = useState<Config | null>(null);
   const [status, setStatus] = useState<Status | null>(null);
+  const [secretsSet, setSecretsSet] = useState<SecretsSet | null>(null);
   const [saving, setSaving] = useState(false);
   const [savedAt, setSavedAt] = useState<number | null>(null);
   const [reindexing, setReindexing] = useState(false);
@@ -62,6 +67,7 @@ export default function SettingsPage() {
       .then((data) => {
         setConfig(data.config);
         setStatus(data.status);
+        setSecretsSet(data.secretsSet);
       });
   }, []);
 
@@ -75,8 +81,13 @@ export default function SettingsPage() {
         body: JSON.stringify(config),
       });
       const data = await res.json();
+      // The server never echoes a real secret back (GET/PUT both mask it to
+      // ""), so this naturally clears any secret field just typed into —
+      // same as SecurityCard clearing its password field after save. The
+      // "set" badge below is what confirms it actually saved.
       setConfig(data.config);
       setStatus(data.status);
+      setSecretsSet(data.secretsSet);
       setSavedAt(Date.now());
     } finally {
       setSaving(false);
@@ -154,6 +165,8 @@ export default function SettingsPage() {
         {FIELDS.map(({ key, label, hint }) => {
           const pathKey = key as keyof Status;
           const st = status?.[pathKey];
+          const isSecret = SECRET_KEYS.has(key);
+          const isSet = isSecret && secretsSet?.[key as SecretKey];
           return (
             <div key={key}>
               <div className="flex items-center justify-between mb-1">
@@ -163,12 +176,15 @@ export default function SettingsPage() {
                     {st.exists && st.writable ? "OK" : "not found"}
                   </Badge>
                 )}
+                {isSecret && <Badge color={isSet ? "green" : "yellow"}>{isSet ? "set" : "not set"}</Badge>}
               </div>
               <input
+                type={isSecret ? "password" : "text"}
                 className="w-full rounded-md bg-[var(--surface-2)] border border-[var(--border)] px-3 py-1.5 text-sm text-ink focus:outline-none focus:border-accent"
                 value={config[key]}
                 onChange={(e) => setConfig({ ...config, [key]: e.target.value })}
-                placeholder={hint}
+                placeholder={isSecret ? (isSet ? "Already set — leave blank to keep it" : hint) : hint}
+                autoComplete={isSecret ? "off" : undefined}
               />
               <p className="text-xs text-neutral-600 mt-1">{hint}</p>
               {key === "embeddingModel" && (
