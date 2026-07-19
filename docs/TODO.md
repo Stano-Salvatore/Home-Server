@@ -101,7 +101,7 @@ RAG, research, tasks — fully alone.
       refactor, not just typecheck.
 - [ ] **DB backup routine** (§8) — nightly `sqlite3 .backup` task, copy to
       Lenovo; eat our own dogfood (it's literally a Task)
-- [ ] Task run history cap (keep last N per task)
+- [x] Task run history cap (last 50 per task, pruned after every run)
 - [x] **ConversationList has no mobile collapse** — real S25 testing (not
       just desktop-width Playwright) caught this live: the chat column's
       mobile gutter was reserved space for a list that had no way to hide,
