@@ -2,6 +2,7 @@ import { probeNodes } from "@/server/backends/registry";
 import { getHardware } from "@/server/hardware/scan";
 import { probeServices } from "@/server/nodes/services";
 import { HOME_ASSISTANT_TOOLS, homeAssistantConfigured } from "./homeassistant";
+import { REMINDER_TOOLS } from "./reminders";
 import type { BuiltinTool } from "./types";
 
 export type { BuiltinTool };
@@ -57,6 +58,7 @@ const NEDORY_BUILTIN_TOOLS: BuiltinTool[] = [
       return services.map((s) => `${s.name} (${s.kind}) — ${s.online ? "online" : "OFFLINE"}`).join("\n");
     },
   },
+  ...REMINDER_TOOLS,
 ];
 
 // A function, not a constant — Home Assistant is Settings-backed and can be

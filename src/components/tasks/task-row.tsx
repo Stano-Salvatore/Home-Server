@@ -14,6 +14,7 @@ type Task = {
   cronExpression: string | null;
   watchPath: string | null;
   watchGlob: string | null;
+  runAt: number | null;
   enabled: boolean;
 };
 
@@ -91,7 +92,11 @@ export function TaskRow({ task, onChanged }: { task: Task; onChanged: () => void
       ? `cron: ${task.cronExpression}`
       : task.triggerType === "file_watch"
         ? `watch: ${task.watchPath}/${task.watchGlob}`
-        : "manual";
+        : task.triggerType === "once"
+          ? task.runAt
+            ? `once: ${new Date(task.runAt * 1000).toLocaleString()}`
+            : "once"
+          : "manual";
 
   const lastRun = runs[0]; // listTaskRuns orders newest-first
   const lastRunLabel = lastRun

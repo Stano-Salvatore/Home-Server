@@ -161,10 +161,11 @@ export const tasks = sqliteTable("tasks", {
   prompt: text("prompt").notNull(),
   backend: text("backend").notNull(), // ollama | llamacpp
   modelId: text("model_id").notNull(),
-  triggerType: text("trigger_type").notNull(), // manual | cron | file_watch
+  triggerType: text("trigger_type").notNull(), // manual | cron | file_watch | once
   cronExpression: text("cron_expression"),
   watchPath: text("watch_path"),
   watchGlob: text("watch_glob"),
+  runAt: integer("run_at"), // triggerType "once": unix seconds; disabled after it fires
   saveToVault: integer("save_to_vault", { mode: "boolean" }).notNull().default(false),
   vaultFilenameTemplate: text("vault_filename_template"),
   enabled: integer("enabled", { mode: "boolean" }).notNull().default(true),

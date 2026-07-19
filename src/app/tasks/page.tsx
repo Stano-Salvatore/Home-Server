@@ -16,6 +16,7 @@ type Task = {
   cronExpression: string | null;
   watchPath: string | null;
   watchGlob: string | null;
+  runAt: number | null;
   enabled: boolean;
 };
 

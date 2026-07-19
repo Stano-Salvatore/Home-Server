@@ -5,6 +5,7 @@ import { tasks, taskRuns } from "@/server/db/schema";
 import { backendFor } from "@/server/backends/registry";
 import type { BackendKind } from "@/server/backends/types";
 import { newId } from "@/server/util/hash";
+import { notify } from "@/server/notify/termux";
 
 const MAX_INJECTED_FILE_CHARS = 4000;
 // A cron task firing every few minutes would otherwise grow this table
@@ -38,7 +39,7 @@ function renderFilename(template: string | null, taskName: string): string {
 
 export async function runTask(
   taskId: string,
-  ctx: { triggerSource: "manual" | "cron" | "file_watch"; changedFilePath?: string },
+  ctx: { triggerSource: "manual" | "cron" | "file_watch" | "once"; changedFilePath?: string },
 ): Promise<typeof taskRuns.$inferSelect> {
   const task = db.select().from(tasks).where(eq(tasks.id, taskId)).get();
   if (!task) throw new Error("Task not found");
@@ -75,15 +76,20 @@ export async function runTask(
       .set({ status: "success", output, finishedAt: Date.now() / 1000 })
       .where(eq(taskRuns.id, runId))
       .run();
+
+    // "once" tasks are the reminder use case — a reply sitting in a table
+    // only you'd see by opening the Tasks page isn't a reminder. Not done
+    // for cron/file_watch/manual: those are frequent/expected, a notification
+    // per run would just be noise.
+    if (ctx.triggerSource === "once") notify(`⏰ ${task.name}`, output || task.prompt);
   } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
     db.update(taskRuns)
-      .set({
-        status: "error",
-        error: err instanceof Error ? err.message : String(err),
-        finishedAt: Date.now() / 1000,
-      })
+      .set({ status: "error", error: message, finishedAt: Date.now() / 1000 })
       .where(eq(taskRuns.id, runId))
       .run();
+
+    if (ctx.triggerSource === "once") notify(`⚠️ ${task.name} failed`, message);
   }
 
   pruneOldRuns(taskId);

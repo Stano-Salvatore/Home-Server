@@ -35,6 +35,14 @@ RAG, research, tasks — fully alone.
       termux-microphone-record's startup lag was clipping the phrase; every
       non-empty chunk now logs what whisper heard, for tuning `WAKE_WORDS`.
       Still needs a real quiet-room retest — last attempt was outside/noisy.
+- [ ] **Reminders** — new `create_reminder` tool (chat/voice: "remind me to
+      X in 10 minutes" / "at 6pm"), backed by a new one-time task trigger
+      type (`triggerType: "once"`, fires via setTimeout, self-disables
+      after) and a best-effort `termux-notification` on completion. Fully
+      verified in-sandbox (fires at the exact scheduled second, disables
+      correctly, ENOENT-suppresses cleanly where termux-notification isn't
+      installed) — **the one thing that needs the real S25**: confirm an
+      actual Android notification appears when it fires there.
 - [ ] **Connect Home Assistant** — Settings → Home Assistant URL + long-lived
       access token (HA → your profile → Security → Long-Lived Access
       Tokens). Once set, `home_assistant_list`/`home_assistant_control`

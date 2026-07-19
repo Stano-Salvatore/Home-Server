@@ -545,6 +545,18 @@ discoverable-days-later.
   scratch DB a dev-server boot has migrated.
 - Long git commit messages with parentheses/quotes need the `git commit -m
   "$(cat <<'EOF' … EOF)"` heredoc form.
+- `npx drizzle-kit generate` after a schema.ts change: 0005/0006 were
+  hand-written straight into the journal without ever running `generate`
+  (no `meta/0005_snapshot.json`/`0006_snapshot.json` exist), so drizzle-kit's
+  diffing is still anchored at 0004 — the next real `generate` re-emits
+  0005/0006's already-applied changes (`CREATE TABLE research_runs`,
+  `ALTER TABLE conversations ADD web_enabled`) alongside whatever's actually
+  new, which would fail on both a fresh install and an upgrade (duplicate
+  table/column). Always diff the generated `.sql` against schema.ts's real
+  history before committing it — hand-trim it to just the genuinely new
+  statements, keep the generated snapshot json (it's an accurate *end
+  state* regardless of the .sql history quirk), test both a fresh-DB boot
+  and an upgrade-from-an-existing-DB boot before trusting it.
 
 ---
 

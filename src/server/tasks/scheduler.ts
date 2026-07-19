@@ -10,6 +10,7 @@ import { runTask } from "./runner";
 type SchedulerState = {
   cronJobs: Map<string, ScheduledTask>;
   fileWatchers: Map<string, FSWatcher>;
+  onceTimers: Map<string, NodeJS.Timeout>;
 };
 
 declare global {
@@ -21,7 +22,7 @@ declare global {
 // (which calls startScheduler) aren't guaranteed to share a module instance.
 function state(): SchedulerState {
   if (!globalThis.__homeServerScheduler) {
-    globalThis.__homeServerScheduler = { cronJobs: new Map(), fileWatchers: new Map() };
+    globalThis.__homeServerScheduler = { cronJobs: new Map(), fileWatchers: new Map(), onceTimers: new Map() };
   }
   return globalThis.__homeServerScheduler;
 }
@@ -37,6 +38,11 @@ function unregister(taskId: string) {
   if (watcher) {
     watcher.close();
     s.fileWatchers.delete(taskId);
+  }
+  const timer = s.onceTimers.get(taskId);
+  if (timer) {
+    clearTimeout(timer);
+    s.onceTimers.delete(taskId);
   }
 }
 
@@ -85,6 +91,34 @@ function matchGlob(filename: string, glob: string): boolean {
   return new RegExp(`^${pattern}$`).test(filename);
 }
 
+// setTimeout overflows (fires ~immediately, silently) past ~24.8 days — stay
+// comfortably under that rather than risk a reminder set for "next month"
+// firing today.
+const MAX_SAFE_TIMEOUT_MS = 20 * 24 * 60 * 60 * 1000;
+
+function registerOnce(task: typeof tasks.$inferSelect) {
+  if (!task.runAt) return;
+  const delayMs = task.runAt * 1000 - Date.now();
+
+  const fire = () => {
+    state().onceTimers.delete(task.id);
+    void runTask(task.id, { triggerSource: "once" }).then(() => {
+      // One-shot: disable so a later reconcile()/boot doesn't re-register it.
+      db.update(tasks).set({ enabled: false }).where(eq(tasks.id, task.id)).run();
+    });
+  };
+
+  if (delayMs <= 0) {
+    fire(); // already due — e.g. catching up after being offline past the target time
+    return;
+  }
+  if (delayMs > MAX_SAFE_TIMEOUT_MS) {
+    console.error(`[tasks] task ${task.id} is scheduled more than 20 days out — not registered yet`);
+    return;
+  }
+  state().onceTimers.set(task.id, setTimeout(fire, delayMs));
+}
+
 export function reconcile(taskId: string) {
   unregister(taskId);
   const task = db.select().from(tasks).where(eq(tasks.id, taskId)).get();
@@ -92,6 +126,7 @@ export function reconcile(taskId: string) {
 
   if (task.triggerType === "cron") registerCron(task);
   else if (task.triggerType === "file_watch") registerFileWatch(task);
+  else if (task.triggerType === "once") registerOnce(task);
 }
 
 // node-cron only fires while the process is actually running — a task
@@ -139,6 +174,7 @@ export function startScheduler() {
       registerCron(task);
       catchUpMissedCron(task);
     } else if (task.triggerType === "file_watch") registerFileWatch(task);
+    else if (task.triggerType === "once") registerOnce(task);
   }
   console.log(`[tasks] scheduler started (${enabledTasks.length} enabled tasks)`);
 }
