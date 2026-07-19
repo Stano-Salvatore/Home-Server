@@ -73,15 +73,19 @@ RAG, research, tasks — fully alone.
       heading path to each chunk; then one vault rescan
 - [ ] **Batch embeddings** (§6.1) — Ollama `/api/embed` takes arrays; current
       loop is one request per chunk
-- [ ] **Missed-cron catch-up** (§6.7) — node-cron skips schedules the phone
-      slept through; boot-time "should have run → run once now" pass
+- [x] **Missed-cron catch-up** (§6.7) — boot-time pass using cron-parser to
+      compute each task's last-scheduled-fire time; runs once if no actual
+      run happened since. Only ever catches up the single most recent
+      missed slot. Verified: backdated a task's createdAt, restarted,
+      confirmed a real run fired; restarted again, confirmed no duplicate.
 - [ ] **Task failure notifications** (§6.7) — `termux-notification` on error
       and on "routine hasn't fired in 2× its period"
 - [ ] **SearXNG on the Lenovo box** (§6.3) — docker-compose; set URL in
       Settings; stops depending on DDG scraping
 - [ ] **Nedory as MCP server** (§6.4) — expose brain_search / catalog /
       deep_research so Claude can query the vault
-- [ ] **Login rate-limiting** (§6.8) — small backoff counter
+- [x] **Login rate-limiting** (§6.8) — global exponential backoff (1s→30s
+      cap) after 3 free attempts, checked before the password itself
 - [x] **Write-only secrets** (§6.8) — braveApiKey/homeAssistantToken no
       longer round-trip through GET /api/settings (masked + a secretsSet
       map instead); an empty secret on save leaves the stored value alone

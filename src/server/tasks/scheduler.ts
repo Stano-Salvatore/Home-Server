@@ -1,9 +1,10 @@
 import cron, { type ScheduledTask } from "node-cron";
 import chokidar, { type FSWatcher } from "chokidar";
+import { CronExpressionParser } from "cron-parser";
 import path from "node:path";
-import { eq } from "drizzle-orm";
+import { eq, desc } from "drizzle-orm";
 import { db } from "@/server/db/client";
-import { tasks } from "@/server/db/schema";
+import { tasks, taskRuns } from "@/server/db/schema";
 import { runTask } from "./runner";
 
 type SchedulerState = {
@@ -93,11 +94,51 @@ export function reconcile(taskId: string) {
   else if (task.triggerType === "file_watch") registerFileWatch(task);
 }
 
+// node-cron only fires while the process is actually running — a task
+// scheduled for while the phone was asleep/off just silently never happens,
+// with nothing to show for it beyond a stale "last success" on the Tasks
+// page. This runs once at boot per enabled cron task: if the most recent
+// scheduled slot (per its cron expression) is more recent than its last
+// actual run, that slot was missed while the process was down — run it once
+// now. Only ever catches up the single most recent missed slot, never
+// backfills a whole string of them after a long outage.
+function catchUpMissedCron(task: typeof tasks.$inferSelect) {
+  if (!task.cronExpression || !cron.validate(task.cronExpression)) return;
+
+  let lastScheduledFireMs: number;
+  try {
+    lastScheduledFireMs = CronExpressionParser.parse(task.cronExpression, {
+      currentDate: new Date(),
+    })
+      .prev()
+      .getTime();
+  } catch {
+    return; // unparseable — registerCron already logs this case
+  }
+
+  // Don't "catch up" a slot that occurred before the task even existed.
+  if (lastScheduledFireMs < task.createdAt * 1000) return;
+
+  const mostRecentRun = db
+    .select({ startedAt: taskRuns.startedAt })
+    .from(taskRuns)
+    .where(eq(taskRuns.taskId, task.id))
+    .orderBy(desc(taskRuns.startedAt))
+    .limit(1)
+    .get();
+  if (mostRecentRun && mostRecentRun.startedAt * 1000 >= lastScheduledFireMs) return;
+
+  console.log(`[tasks] catching up a missed cron fire for task ${task.id}`);
+  void runTask(task.id, { triggerSource: "cron" });
+}
+
 export function startScheduler() {
   const enabledTasks = db.select().from(tasks).where(eq(tasks.enabled, true)).all();
   for (const task of enabledTasks) {
-    if (task.triggerType === "cron") registerCron(task);
-    else if (task.triggerType === "file_watch") registerFileWatch(task);
+    if (task.triggerType === "cron") {
+      registerCron(task);
+      catchUpMissedCron(task);
+    } else if (task.triggerType === "file_watch") registerFileWatch(task);
   }
   console.log(`[tasks] scheduler started (${enabledTasks.length} enabled tasks)`);
 }
