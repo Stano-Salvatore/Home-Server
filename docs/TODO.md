@@ -71,8 +71,16 @@ RAG, research, tasks — fully alone.
 - [ ] **Reranker stage** (§6.1) — bge-reranker-v2-m3 over the fused top-20
 - [ ] **Heading-aware chunking** (§6.1) — split on markdown headings, prepend
       heading path to each chunk; then one vault rescan
-- [ ] **Batch embeddings** (§6.1) — Ollama `/api/embed` takes arrays; current
-      loop is one request per chunk
+- [x] **Batch embeddings** (§6.1) — switched to Ollama's `/api/embed`
+      (batch), chunked at 32 texts/request. Verified: a multi-paragraph
+      note's chunks went out as one request ("batch of 3 texts" in the
+      fake Ollama's log), not one request per chunk.
+- [ ] **Rescan/watcher race on a brand-new file** (discovered while
+      verifying the above) — adding a vault file while the watcher is
+      active fires both the watcher's own ingest AND (if a rescan happens
+      to run around the same time) a second insert attempt, which fails
+      with a caught-but-logged `UNIQUE constraint failed: source_path`.
+      Not data-losing (the watcher's ingestion already won), just noisy.
 - [x] **Missed-cron catch-up** (§6.7) — boot-time pass using cron-parser to
       compute each task's last-scheduled-fire time; runs once if no actual
       run happened since. Only ever catches up the single most recent

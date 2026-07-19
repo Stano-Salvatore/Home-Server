@@ -137,23 +137,34 @@ async function* streamChat(
   }
 }
 
+// A vault rescan can mean hundreds/thousands of chunks — one request per
+// chunk (the old /api/embeddings, singular-prompt-only endpoint) made
+// ingestion network-round-trip-bound. /api/embed takes an array and returns
+// embeddings in the same order. Still batched (not all texts in one
+// request): a huge single payload risks a slow/oversized request against a
+// phone-class Ollama instance, so this trades a little of the win for
+// staying reliable at vault-rescan scale.
+const EMBED_BATCH_SIZE = 32;
+
 export async function embed(
   texts: string[],
   model: string,
   hostOverride?: string,
 ): Promise<number[][]> {
+  if (texts.length === 0) return [];
   // Embeddings run on the configured embedding host, else the default node.
   const host = clean(hostOverride?.trim() || defaultNode().url);
   const results: number[][] = [];
-  for (const text of texts) {
-    const res = await fetch(`${host}/api/embeddings`, {
+  for (let i = 0; i < texts.length; i += EMBED_BATCH_SIZE) {
+    const batch = texts.slice(i, i + EMBED_BATCH_SIZE);
+    const res = await fetch(`${host}/api/embed`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ model, prompt: text }),
+      body: JSON.stringify({ model, input: batch }),
     });
     if (!res.ok) throw new Error(`Ollama embeddings failed: ${res.status} ${res.statusText}`);
     const data = await res.json();
-    results.push(data.embedding as number[]);
+    results.push(...(data.embeddings as number[][]));
   }
   return results;
 }
