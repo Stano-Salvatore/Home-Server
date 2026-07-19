@@ -70,7 +70,14 @@ record() {
 transcribe() {
   local wav="$1"
   "$WHISPER_BIN" -m "$WHISPER_MODEL" -f "$wav" -nt -otxt -of "$WORK_DIR/out" >/dev/null 2>&1
-  tr '\n' ' ' <"$WORK_DIR/out.txt" 2>/dev/null | sed 's/^ *//; s/ *$//'
+  # Strip whisper's own non-speech markers (e.g. [BLANK_AUDIO],
+  # [MUSIC PLAYING], (wind blowing)) — on silence/noise it emits these
+  # instead of nothing, and without stripping them here a silent recording
+  # gets sent to Nedory as a literal question instead of being treated as
+  # "didn't catch anything".
+  tr '\n' ' ' <"$WORK_DIR/out.txt" 2>/dev/null \
+    | sed -E 's/\[[^]]*\]//g; s/\([^)]*\)//g' \
+    | sed 's/^ *//; s/ *$//'
 }
 
 ask_nedory() {
