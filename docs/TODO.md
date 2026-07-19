@@ -82,8 +82,9 @@ RAG, research, tasks — fully alone.
 - [ ] **Nedory as MCP server** (§6.4) — expose brain_search / catalog /
       deep_research so Claude can query the vault
 - [ ] **Login rate-limiting** (§6.8) — small backoff counter
-- [ ] **Write-only secrets** (§6.8) — braveApiKey/tokens shouldn't round-trip
-      through GET /api/settings
+- [x] **Write-only secrets** (§6.8) — braveApiKey/homeAssistantToken no
+      longer round-trip through GET /api/settings (masked + a secretsSet
+      map instead); an empty secret on save leaves the stored value alone
 - [ ] **Consolidation sweep** (§6.9, own PR, zero behavior change): one SSE
       reader (6 copies today), one litertlm-JSON-call helper (3), one pill
       chip component (5), one settings-collection helper (8); fix
