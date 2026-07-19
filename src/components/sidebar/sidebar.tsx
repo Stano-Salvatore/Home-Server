@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useSidebarCollapsed } from "@/lib/useSidebarCollapsed";
+import { useMobileNavOpen } from "@/lib/useMobileNavOpen";
 import {
   MessageSquare,
   Bot,
@@ -132,7 +133,9 @@ function LogoutButton() {
 
 export function Sidebar() {
   const pathname = usePathname();
-  const [open, setOpen] = useState(false);
+  // Shared with the chat conversation list — on mobile the hamburger opens
+  // both as one drawer, not just the nav rail (see useMobileNavOpen).
+  const [open, setOpen] = useMobileNavOpen();
   // Desktop-only: the rail slides away entirely, Odysseus-style, leaving a
   // floating hamburger to bring it back. Mobile keeps the off-canvas drawer.
   // Shared with the chat conversation list so both clear together.
