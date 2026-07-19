@@ -28,12 +28,22 @@ RAG, research, tasks — fully alone.
 
 ## Now — on-device shakedown (after `git pull` on the branch)
 
-- [ ] **Voice loop on the S21** (`docs/voice-loop.md`) — build whisper.cpp,
-      install `bin/nedory-voice`, set `NEDORY_URL` in `~/.nedory-voice.env`,
-      run `nedory-voice ask` first (proves the pipeline), then `nedory-voice
-      listen` for hands-free "Hey Nedory". Tune `WAKE_WORDS` against
-      whatever whisper actually transcribes it as. Untested on real
-      hardware — report back what breaks.
+- [x] Push-to-talk voice loop (`nedory-voice ask`) — proven working
+      end-to-end on the S21 against the real S25 dashboard.
+- [ ] **Hands-free "Hey Nedory"** (`docs/voice-loop.md`) — `nedory-voice
+      listen`. Wake-window widened 3s→5s after on-device testing found
+      termux-microphone-record's startup lag was clipping the phrase; every
+      non-empty chunk now logs what whisper heard, for tuning `WAKE_WORDS`.
+      Still needs a real quiet-room retest — last attempt was outside/noisy.
+- [ ] **Connect Home Assistant** — Settings → Home Assistant URL + long-lived
+      access token (HA → your profile → Security → Long-Lived Access
+      Tokens). Once set, `home_assistant_list`/`home_assistant_control`
+      become available to any tool-calling turn, chat or voice — "Hey
+      Nedory, turn off the AC" now actually calls HA, not just talks about
+      it. Verified against a fake HA server; **untested against the real
+      Lenovo HA instance** — confirm the fuzzy entity match ("AC", "socket")
+      actually resolves to your real entity_ids, tune the `entity` phrasing
+      you use if it picks the wrong device.
 - [ ] `pkg install tmux` if missing, then `nedory stop && nedory` — confirm it
       prints the tmux session line and `tmux attach -t nedory` shows the app
 - [ ] Vault rescan once (Settings) — picks up the chunk cleaner re-ingest
