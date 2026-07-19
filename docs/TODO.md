@@ -43,6 +43,25 @@ RAG, research, tasks — fully alone.
       correctly, ENOENT-suppresses cleanly where termux-notification isn't
       installed) — **the one thing that needs the real S25**: confirm an
       actual Android notification appears when it fires there.
+- [x] **Web Share Target capture** (voice-loop plan, Phase 2) — highlight text
+      on the S25 (or any page/app) → Share → Nedory → `/share` shows what was
+      shared and files it as a vault note (`writeNote`, `Shared/` folder) or a
+      one-time reminder (reuses the same `createTask({triggerType: "once"})`
+      path as `create_reminder`). GET-method `share_target` in the manifest —
+      no service worker changes needed, the SW stays the no-op passthrough.
+      Verified end-to-end in-sandbox: manifest exposes `share_target`,
+      `/share?title=&text=&url=` renders the captured content, "Save as
+      note" writes+ingests a real vault file (confirmed against a fake
+      Ollama embed endpoint), "Remind me" creates a task that fires and
+      self-disables at the scheduled second. **Not done: "list" as a third
+      destination** — no list/todo-item concept exists anywhere in the app
+      yet (checked: no such table, no such API); would need its own small
+      feature rather than a fake fit into `memoryFacts` (those are pinned
+      into *every* conversation's context — wrong semantics for a stray
+      shopping-list item). **Needs the real S25**: confirm Android's share
+      sheet actually lists the installed PWA as a target and that the
+      capture page opens correctly from a real share (only testable on
+      the device, not in-sandbox).
 - [ ] **Connect Home Assistant** — Settings → Home Assistant URL + long-lived
       access token (HA → your profile → Security → Long-Lived Access
       Tokens). Once set, `home_assistant_list`/`home_assistant_control`
