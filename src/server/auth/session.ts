@@ -1,5 +1,6 @@
 import crypto from "node:crypto";
 import { getSetting, setSetting } from "@/server/settings/config";
+import { readJsonBlob, writeJsonBlob, isPlainObject } from "@/server/settings/jsonBlob";
 
 // Dashboard-wide auth: one shared secret protects the whole app, matching
 // the actual threat model (this is a personal home-server dashboard reached
@@ -96,4 +97,43 @@ export function revokeSessionToken(token: string | undefined) {
   if (!token) return;
   const hash = sha256(token);
   saveSessions(loadSessions().filter((s) => s.tokenHash !== hash));
+}
+
+// Login rate-limiting: a small exponential backoff, not a full lockout —
+// this is a single-user personal dashboard on a LAN/Tailscale, not a
+// multi-tenant service, so a global (not per-IP) counter matches the actual
+// threat model. First few failures (typos) get an instant retry; beyond
+// that each additional failure roughly doubles the enforced wait, capped.
+const ATTEMPTS_KEY = "dashboard_login_attempts";
+const FREE_ATTEMPTS = 3;
+const BASE_DELAY_MS = 1000;
+const MAX_DELAY_MS = 30_000;
+
+type LoginAttempts = { count: number; lastAttemptAt: number };
+
+function loadAttempts(): LoginAttempts {
+  const a = readJsonBlob<Partial<LoginAttempts>>(
+    ATTEMPTS_KEY,
+    {},
+    isPlainObject as (v: unknown) => v is Partial<LoginAttempts>,
+  );
+  return { count: a.count ?? 0, lastAttemptAt: a.lastAttemptAt ?? 0 };
+}
+
+/** How many ms the caller must wait before the next login attempt is
+ *  allowed. 0 = go ahead now. */
+export function loginBackoffMs(): number {
+  const { count, lastAttemptAt } = loadAttempts();
+  if (count <= FREE_ATTEMPTS) return 0;
+  const delay = Math.min(BASE_DELAY_MS * 2 ** (count - FREE_ATTEMPTS - 1), MAX_DELAY_MS);
+  return Math.max(0, delay - (Date.now() - lastAttemptAt));
+}
+
+export function recordLoginFailure() {
+  const a = loadAttempts();
+  writeJsonBlob<LoginAttempts>(ATTEMPTS_KEY, { count: a.count + 1, lastAttemptAt: Date.now() });
+}
+
+export function recordLoginSuccess() {
+  writeJsonBlob<LoginAttempts>(ATTEMPTS_KEY, { count: 0, lastAttemptAt: 0 });
 }
