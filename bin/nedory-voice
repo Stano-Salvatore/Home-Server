@@ -119,12 +119,17 @@ cmd_ask() {
   termux-tts-speak "$answer"
 }
 
-# Short polling chunks (3s) just to catch the wake word cheaply; on a hit, a
-# longer dedicated recording (6s, cued by "Yes?") captures the actual
-# question. Trying to parse the whole "Hey Nedory, what's the weather..."
-# as one continuous utterance risks clipping the question at the short
-# chunk's boundary — a brief pause after the wake word (like any smart
-# speaker) is the trade-off for a first working version.
+# Polling chunks long enough to actually catch a full "Hey Nedory" — on-device
+# testing found termux-microphone-record has real startup lag (the recorder
+# isn't capturing the instant the command is issued), so a tight 3s window
+# clipped the start of the phrase and whisper hallucinated non-speech
+# ([BLANK_AUDIO], "(dramatic music)") instead of transcribing it. 5s matches
+# the duration already proven reliable for the ask() push-to-talk path. On a
+# wake-word hit, a further dedicated recording (6s, cued by "Yes?") captures
+# the actual question — trying to parse the whole "Hey Nedory, what's the
+# weather..." as one continuous utterance risks clipping the question at the
+# chunk boundary; a brief pause after the wake word (like any smart speaker)
+# is the trade-off for a first working version.
 #
 # Known limitation: whisper's tiny model can hallucinate short phrases on
 # background noise/silence, which can false-trigger this loop. No noise gate
@@ -134,9 +139,14 @@ cmd_ask() {
 listen_loop() {
   echo "◢ Nedory Voice listening for: $WAKE_WORDS"
   while true; do
-    record 3 "$WORK_DIR/chunk.wav"
+    record 5 "$WORK_DIR/chunk.wav"
     local heard heard_lc
     heard="$(transcribe "$WORK_DIR/chunk.wav")"
+    # Printed for every non-empty chunk, not just matches — without this
+    # there was no way to see what whisper actually heard while tuning
+    # WAKE_WORDS, which is exactly the debugging step the first on-device
+    # test was missing.
+    [ -n "$heard" ] && echo "· heard: \"$heard\""
     [ -z "$heard" ] && continue
     heard_lc="${heard,,}"
     matches_wake_word "$heard_lc" || continue
