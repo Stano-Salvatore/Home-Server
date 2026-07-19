@@ -1,4 +1,4 @@
-import { litertlmBaseUrl, litertlmModelId } from "@/server/backends/litertlm";
+import { litertlmCall } from "@/server/backends/litertlm";
 import { listCustomNodes, type CustomNode } from "./customNodes";
 import { isCatalogQuery, extractCatalogKeyword } from "./catalog";
 
@@ -54,30 +54,19 @@ export async function planQuery(userContent: string): Promise<QueryPlan> {
   }
 
   const nodes = listCustomNodes();
-  try {
-    const res = await fetch(`${litertlmBaseUrl()}/v1/chat/completions`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        model: litertlmModelId(),
-        stream: false,
-        max_tokens: 64,
-        temperature: 0,
-        messages: [
-          { role: "system", content: SYSTEM_PROMPT },
-          {
-            role: "user",
-            content: `Known scopes: ${nodes.map((n) => n.label).join(", ")}\n\nQuestion: ${userContent}`,
-          },
-        ],
-      }),
-      signal: AbortSignal.timeout(PLANNER_TIMEOUT_MS),
-    });
-    if (!res.ok) return FALLBACK;
-    const data = await res.json();
-    const text: unknown = data.choices?.[0]?.message?.content;
-    if (typeof text !== "string") return FALLBACK;
+  const text = await litertlmCall(
+    [
+      { role: "system", content: SYSTEM_PROMPT },
+      {
+        role: "user",
+        content: `Known scopes: ${nodes.map((n) => n.label).join(", ")}\n\nQuestion: ${userContent}`,
+      },
+    ],
+    { maxTokens: 64, temperature: 0, timeoutMs: PLANNER_TIMEOUT_MS },
+  );
+  if (!text) return FALLBACK;
 
+  try {
     const parsed = JSON.parse(
       text.trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, ""),
     ) as { mode?: unknown; entity?: unknown; scope?: unknown };
@@ -91,7 +80,8 @@ export async function planQuery(userContent: string): Promise<QueryPlan> {
       scopeId: resolveScopeId(parsed.scope, nodes),
     };
   } catch {
-    // Timeout, connection refused, non-JSON reply — all degrade silently.
+    // Non-JSON reply — degrade silently (litertlmCall already handles
+    // timeout/connection-refused by returning null above).
     return FALLBACK;
   }
 }

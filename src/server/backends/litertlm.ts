@@ -16,6 +16,40 @@ export function litertlmModelId(): string {
   return loadSettings().litertlmModelId;
 }
 
+// One-shot, non-streaming litert-lm call for the small structured-output use
+// cases (brain/planner.ts, tools/planner.ts, chat/autotitle.ts) — every one
+// of them wants the exact same shape: POST, bail on a non-ok response, pull
+// choices[0].message.content, degrade to null on ANY failure (timeout,
+// connection refused, non-200, non-string content) so a slow/down local
+// model never blocks or breaks the chat turn that triggered it. Callers own
+// parsing/validating that string themselves (JSON tool calls, a title,
+// query-plan JSON — each shape is different).
+export async function litertlmCall(
+  messages: ChatMessage[],
+  opts: { maxTokens: number; temperature: number; timeoutMs: number },
+): Promise<string | null> {
+  try {
+    const res = await fetch(`${litertlmBaseUrl()}/v1/chat/completions`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        model: litertlmModelId(),
+        stream: false,
+        max_tokens: opts.maxTokens,
+        temperature: opts.temperature,
+        messages,
+      }),
+      signal: AbortSignal.timeout(opts.timeoutMs),
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    const text: unknown = data.choices?.[0]?.message?.content;
+    return typeof text === "string" ? text : null;
+  } catch {
+    return null;
+  }
+}
+
 async function* streamChat(
   target: string,
   messages: ChatMessage[],

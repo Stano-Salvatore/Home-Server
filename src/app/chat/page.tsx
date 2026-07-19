@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowUp } from "lucide-react";
 import { ModelPicker } from "@/components/chat/model-picker";
+import { PillToggle } from "@/components/ui/pill-toggle";
 import type { ChatBackend } from "@/lib/types";
 
 const LAST_MODEL_KEY = "nedory-last-model";
@@ -147,42 +148,15 @@ export default function ChatIndexPage() {
         </div>
         <div className="flex items-center justify-between px-3 pb-3 pt-2">
           <div className="flex items-center gap-1">
-            <button
-              onClick={() => setBrain((b) => !b)}
-              className={`rounded-full border px-3 py-1 text-xs transition-colors ${
-                brain ? "border-accent text-accent" : "text-ink-dim hover:text-ink"
-              }`}
-              style={{
-                borderColor: brain ? undefined : "var(--border)",
-                background: brain ? "rgba(224, 108, 117, 0.10)" : undefined,
-              }}
-            >
+            <PillToggle active={brain} onClick={() => setBrain((b) => !b)}>
               Brain
-            </button>
-            <button
-              onClick={() => setWiki((w) => !w)}
-              className={`rounded-full border px-3 py-1 text-xs transition-colors ${
-                wiki ? "border-accent text-accent" : "text-ink-dim hover:text-ink"
-              }`}
-              style={{
-                borderColor: wiki ? undefined : "var(--border)",
-                background: wiki ? "rgba(224, 108, 117, 0.10)" : undefined,
-              }}
-            >
+            </PillToggle>
+            <PillToggle active={wiki} onClick={() => setWiki((w) => !w)}>
               Wikipedia
-            </button>
-            <button
-              onClick={() => setWeb((w) => !w)}
-              className={`rounded-full border px-3 py-1 text-xs transition-colors ${
-                web ? "border-accent text-accent" : "text-ink-dim hover:text-ink"
-              }`}
-              style={{
-                borderColor: web ? undefined : "var(--border)",
-                background: web ? "rgba(224, 108, 117, 0.10)" : undefined,
-              }}
-            >
+            </PillToggle>
+            <PillToggle active={web} onClick={() => setWeb((w) => !w)}>
               Web
-            </button>
+            </PillToggle>
           </div>
           <button
             onClick={() => void start()}

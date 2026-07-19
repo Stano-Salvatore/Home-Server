@@ -9,6 +9,7 @@ import { resolveAgentOption } from "@/lib/agentModel";
 import { friendlyError } from "@/lib/friendlyError";
 import { Markdown } from "@/components/chat/markdown";
 import { ThinkingSpiral } from "@/components/ui/thinking-spiral";
+import { readSSE } from "@/lib/sse";
 
 type Agent = { id: string; name: string; emoji: string; modelTag: string; systemPrompt?: string; wikiDefault?: boolean; color?: string };
 
@@ -38,28 +39,13 @@ async function streamAsk(
     body: JSON.stringify(body),
     signal,
   });
-  if (!res.body) throw new Error("No stream");
-  const reader = res.body.getReader();
-  const decoder = new TextDecoder();
-  let buf = "";
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    buf += decoder.decode(value, { stream: true });
-    const events = buf.split("\n\n");
-    buf = events.pop() ?? "";
-    for (const evt of events) {
-      const line = evt.replace(/^data:\s*/, "").trim();
-      if (!line) continue;
-      const data = JSON.parse(line);
-      if (data.error) onError(data.error);
-      else if (data.delta) onDelta(data.delta);
-    }
+  for await (const data of readSSE(res) as AsyncGenerator<{ error?: string; delta?: string }>) {
+    if (data.error) onError(data.error);
+    else if (data.delta) onDelta(data.delta);
   }
 }
 
 export default function CouncilPage() {
-  const [options, setOptions] = useState<ModelOption[]>([]);
   const [participants, setParticipants] = useState<Participant[]>([]);
   const [prompt, setPrompt] = useState("");
   const [wiki, setWiki] = useState(true);
@@ -80,7 +66,6 @@ export default function CouncilPage() {
       fetch("/api/models").then((r) => r.json()),
     ]).then(([agentsData, modelsData]) => {
       const opts: ModelOption[] = modelsData.options ?? [];
-      setOptions(opts);
       const agents: Agent[] = agentsData.agents ?? [];
       // Seed the council with every agent whose model is actually available.
       const seeded: Participant[] = [];

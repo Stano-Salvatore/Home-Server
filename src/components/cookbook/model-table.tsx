@@ -3,6 +3,7 @@
 import { Fragment, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { readSSE } from "@/lib/sse";
 import type { ScoredModel, FitLabel } from "@/lib/types";
 
 const LABEL_COLOR: Record<FitLabel, "green" | "blue" | "yellow" | "red"> = {
@@ -34,28 +35,19 @@ export function ModelTable({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ tag }),
       });
-      if (!res.body) throw new Error("No response stream");
-      const reader = res.body.getReader();
-      const decoder = new TextDecoder();
-      let buffer = "";
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        buffer += decoder.decode(value, { stream: true });
-        const events = buffer.split("\n\n");
-        buffer = events.pop() ?? "";
-        for (const evt of events) {
-          const line = evt.replace(/^data:\s*/, "").trim();
-          if (!line) continue;
-          const data = JSON.parse(line);
-          if (data.error) {
-            setProgress(`error: ${data.error}`);
-          } else if (data.total && data.completed) {
-            const pct = Math.round((data.completed / data.total) * 100);
-            setProgress(`${data.status} — ${pct}%`);
-          } else {
-            setProgress(data.status ?? "");
-          }
+      for await (const data of readSSE(res) as AsyncGenerator<{
+        error?: string;
+        status?: string;
+        completed?: number;
+        total?: number;
+      }>) {
+        if (data.error) {
+          setProgress(`error: ${data.error}`);
+        } else if (data.total && data.completed) {
+          const pct = Math.round((data.completed / data.total) * 100);
+          setProgress(`${data.status} — ${pct}%`);
+        } else {
+          setProgress(data.status ?? "");
         }
       }
       onPulled();

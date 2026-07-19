@@ -1,4 +1,4 @@
-import { litertlmBaseUrl, litertlmModelId } from "@/server/backends/litertlm";
+import { litertlmCall } from "@/server/backends/litertlm";
 import type { ToolDef, ToolCall } from "./types";
 
 // Tool selection follows the same shape as brain/planner.ts: one small-model
@@ -25,27 +25,16 @@ export async function planToolCalls(userContent: string, tools: ToolDef[]): Prom
   if (tools.length === 0) return [];
   const validNames = new Set(tools.map((t) => t.name));
 
-  try {
-    const res = await fetch(`${litertlmBaseUrl()}/v1/chat/completions`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        model: litertlmModelId(),
-        stream: false,
-        max_tokens: 200,
-        temperature: 0,
-        messages: [
-          { role: "system", content: systemPrompt(tools) },
-          { role: "user", content: userContent },
-        ],
-      }),
-      signal: AbortSignal.timeout(PLANNER_TIMEOUT_MS),
-    });
-    if (!res.ok) return [];
-    const data = await res.json();
-    const text: unknown = data.choices?.[0]?.message?.content;
-    if (typeof text !== "string") return [];
+  const text = await litertlmCall(
+    [
+      { role: "system", content: systemPrompt(tools) },
+      { role: "user", content: userContent },
+    ],
+    { maxTokens: 200, temperature: 0, timeoutMs: PLANNER_TIMEOUT_MS },
+  );
+  if (!text) return [];
 
+  try {
     const parsed = JSON.parse(
       text.trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, ""),
     ) as { calls?: unknown };
@@ -62,7 +51,8 @@ export async function planToolCalls(userContent: string, tools: ToolDef[]): Prom
     }
     return calls;
   } catch {
-    // Timeout, connection refused, non-JSON reply — degrade to no tool calls.
+    // Non-JSON reply — degrade to no tool calls (litertlmCall already
+    // handles timeout/connection-refused by returning null above).
     return [];
   }
 }

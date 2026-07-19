@@ -2,6 +2,7 @@
 
 import { useCallback, useRef, useState } from "react";
 import { friendlyError } from "@/lib/friendlyError";
+import { readSSE } from "@/lib/sse";
 
 // Fired after any stream completes (send or regenerate) so sibling
 // components — namely the sidebar conversation list, which lives outside
@@ -71,57 +72,47 @@ export function useChatStream(conversationId: string | null) {
         body: body ? JSON.stringify(body) : undefined,
         signal: controller.signal,
       });
-      if (!res.body) throw new Error("No response stream");
-
-      const reader = res.body.getReader();
-      const decoder = new TextDecoder();
-      let buffer = "";
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        buffer += decoder.decode(value, { stream: true });
-        const events = buffer.split("\n\n");
-        buffer = events.pop() ?? "";
-        for (const evt of events) {
-          const line = evt.replace(/^data:\s*/, "").trim();
-          if (!line) continue;
-          const data = JSON.parse(line);
-          if (data.error) {
-            setError(friendlyError(data.error));
-          } else if (data.delta) {
-            setMessages((prev) => {
-              const next = [...prev];
-              next[next.length - 1] = {
-                ...next[next.length - 1],
-                content: next[next.length - 1].content + data.delta,
-                status: undefined,
-              };
-              return next;
-            });
-          } else if (data.status) {
-            setMessages((prev) => {
-              const next = [...prev];
-              next[next.length - 1] = { ...next[next.length - 1], status: data.status };
-              return next;
-            });
-          } else if (data.citations) {
-            setMessages((prev) => {
-              const next = [...prev];
-              next[next.length - 1] = { ...next[next.length - 1], citations: data.citations };
-              return next;
-            });
-          } else if (data.stats) {
-            setMessages((prev) => {
-              const next = [...prev];
-              next[next.length - 1] = {
-                ...next[next.length - 1],
-                durationMs: data.stats.durationMs,
-                tokenCount: data.stats.tokenCount,
-              };
-              return next;
-            });
-          }
+      for await (const data of readSSE(res) as AsyncGenerator<{
+        error?: string;
+        delta?: string;
+        status?: string;
+        citations?: ChatUIMessage["citations"];
+        stats?: { durationMs: number; tokenCount: number };
+      }>) {
+        if (data.error) {
+          setError(friendlyError(data.error));
+        } else if (data.delta) {
+          setMessages((prev) => {
+            const next = [...prev];
+            next[next.length - 1] = {
+              ...next[next.length - 1],
+              content: next[next.length - 1].content + data.delta,
+              status: undefined,
+            };
+            return next;
+          });
+        } else if (data.status) {
+          setMessages((prev) => {
+            const next = [...prev];
+            next[next.length - 1] = { ...next[next.length - 1], status: data.status };
+            return next;
+          });
+        } else if (data.citations) {
+          setMessages((prev) => {
+            const next = [...prev];
+            next[next.length - 1] = { ...next[next.length - 1], citations: data.citations };
+            return next;
+          });
+        } else if (data.stats) {
+          setMessages((prev) => {
+            const next = [...prev];
+            next[next.length - 1] = {
+              ...next[next.length - 1],
+              durationMs: data.stats!.durationMs,
+              tokenCount: data.stats!.tokenCount,
+            };
+            return next;
+          });
         }
       }
     } catch (err) {

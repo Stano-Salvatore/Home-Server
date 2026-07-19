@@ -4,6 +4,7 @@ import { useEffect, useRef, useState, use as usePromise } from "react";
 import { useChatStream } from "@/lib/useChatStream";
 import { MessageBubble } from "@/components/chat/message-bubble";
 import { ModelPicker } from "@/components/chat/model-picker";
+import { PillToggle } from "@/components/ui/pill-toggle";
 import { ArrowUp, Square, RefreshCw } from "lucide-react";
 import type { ChatBackend } from "@/lib/types";
 
@@ -128,42 +129,15 @@ export default function ConversationPage({ params }: { params: Promise<{ id: str
         </div>
         {conversation && (
           <div className="flex items-center gap-1.5 shrink-0">
-            <button
-              onClick={() => patch({ ragEnabled: !conversation.ragEnabled })}
-              className={`rounded-full border px-3 py-1 text-xs transition-colors ${
-                conversation.ragEnabled ? "border-accent text-accent" : "text-ink-dim hover:text-ink"
-              }`}
-              style={{
-                borderColor: conversation.ragEnabled ? undefined : "var(--border)",
-                background: conversation.ragEnabled ? "rgba(224, 108, 117, 0.10)" : undefined,
-              }}
-            >
+            <PillToggle active={conversation.ragEnabled} onClick={() => patch({ ragEnabled: !conversation.ragEnabled })}>
               Brain
-            </button>
-            <button
-              onClick={() => patch({ wikiEnabled: !conversation.wikiEnabled })}
-              className={`rounded-full border px-3 py-1 text-xs transition-colors ${
-                conversation.wikiEnabled ? "border-accent text-accent" : "text-ink-dim hover:text-ink"
-              }`}
-              style={{
-                borderColor: conversation.wikiEnabled ? undefined : "var(--border)",
-                background: conversation.wikiEnabled ? "rgba(224, 108, 117, 0.10)" : undefined,
-              }}
-            >
+            </PillToggle>
+            <PillToggle active={conversation.wikiEnabled} onClick={() => patch({ wikiEnabled: !conversation.wikiEnabled })}>
               Wikipedia
-            </button>
-            <button
-              onClick={() => patch({ webEnabled: !conversation.webEnabled })}
-              className={`rounded-full border px-3 py-1 text-xs transition-colors ${
-                conversation.webEnabled ? "border-accent text-accent" : "text-ink-dim hover:text-ink"
-              }`}
-              style={{
-                borderColor: conversation.webEnabled ? undefined : "var(--border)",
-                background: conversation.webEnabled ? "rgba(224, 108, 117, 0.10)" : undefined,
-              }}
-            >
+            </PillToggle>
+            <PillToggle active={conversation.webEnabled} onClick={() => patch({ webEnabled: !conversation.webEnabled })}>
               Web
-            </button>
+            </PillToggle>
           </div>
         )}
       </div>
