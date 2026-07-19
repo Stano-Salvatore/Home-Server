@@ -191,12 +191,17 @@ RAG, research, tasks — fully alone.
       getting the robot vacuum into HA at all.
 - [ ] **Real wake-word engine** (voice-loop plan, Phase 4 upgrade) — swap
       `bin/nedory-voice`'s whisper-polling wake detection (works, but
-      battery-hungry and prone to false triggers on noise) for a proper
-      always-on wake-word model. Porcupine's Python SDK is the obvious
-      candidate but ships a binary built for glibc; Termux runs on Android's
-      bionic libc, so it's untested whether `pip install pvporcupine` even
-      loads there — try it, and fall back to a native Android app (the
-      original plan's approach) only if it doesn't.
+      battery-hungry and prone to false triggers/mishearings — confirmed live
+      on-device: whisper's tiny model transcribed "Hey Nedory" as "Nederi"
+      consistently, and ~10 added `WAKE_WORDS` mishearing-variants still
+      didn't reliably catch it) for a proper always-on wake-word model.
+      **Porcupine's Python SDK is a confirmed dead end on Termux** — not a
+      binary-load failure, `pvporcupine` explicitly checks
+      `platform.system()` and raises `ValueError: Unsupported system
+      'Android'.` outright. Don't re-try this path. A native Android app is
+      the real fix — parked until the OptiPlex/PC arrives (below), at which
+      point the voice loop moving off the S21 entirely may make this whole
+      question moot anyway.
 - [ ] **Voice loop moves to the OptiPlex** (voice-loop plan, Phase 5) — once
       it lands, move whisper.cpp (and ideally Nedory's own brain) off the
       S21 onto real hardware; the S21 becomes purely mic+speakers+wake-word.
