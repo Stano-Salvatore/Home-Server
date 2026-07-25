@@ -86,7 +86,17 @@ export function ModelTable({
                   <td className="py-2 pr-3 text-neutral-100">{m.family}</td>
                   <td className="py-2 pr-3 text-neutral-400">{m.paramsB}B</td>
                   <td className="py-2 pr-3 text-neutral-400">{m.quant}</td>
-                  <td className="py-2 pr-3 text-neutral-400">{m.contextLength.toLocaleString()}</td>
+                  <td className="py-2 pr-3 text-neutral-400">
+                    <div>{m.contextLength.toLocaleString()}</div>
+                    {m.kvCacheGB > 0 && (
+                      <div
+                        className="text-[10px] text-neutral-600"
+                        title="Estimated KV-cache size at full context (q8). Fit is scored at a realistic working context, not the max."
+                      >
+                        ~{m.kvCacheGB} GB KV
+                      </div>
+                    )}
+                  </td>
                   <td className="py-2 pr-3 text-neutral-400">~{m.estTokPerSec} t/s</td>
                   <td className="py-2 pr-3 text-neutral-300 font-medium">{m.score}</td>
                   <td className="py-2 pr-3 text-neutral-500">{m.mode.toUpperCase()}</td>
