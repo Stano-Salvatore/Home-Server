@@ -1,0 +1,113 @@
+#!/usr/bin/env bash
+# Install / upgrade the LiteRT-LM runtime (Google's on-device LLM inference
+# engine) that backs Nedory's `litertlm` chat backend. Run this ON whichever
+# box runs `litert-lm serve` — the compute phone (Termux) or the desktop.
+#
+# Why this exists: Nedory talks to litert-lm's OpenAI-compatible `serve` over
+# HTTP (see src/server/backends/litertlm.ts), but nothing in the repo installed
+# or pinned the runtime itself — it was a manual, undocumented step. Two reasons
+# to upgrade:
+#   1. `serve` used to be CPU-only (no --backend flag, google-ai-edge/LiteRT-LM
+#      issue #1929) — roughly ~15 tok/s. Newer releases add automatic GPU/NPU
+#      backend selection to `run` *and* `serve`, so upgrading is the path off
+#      CPU-only on GPU-capable boxes like the S25 (Adreno 830, OpenCL reachable
+#      from Termux).
+#   2. Once GPU serve works, moving the model from gemma4-e2b to the larger
+#      gemma4-e4b (already used on the llama.cpp/Vulkan path) becomes worth it.
+#
+# There are NO prebuilt Linux/Android binaries in the LiteRT-LM releases (only a
+# macOS arm64 one), so on Termux/Linux the runtime installs from PyPI (the
+# `litert-lm` package, Python 3.10+). We keep it in its own venv to dodge PEP 668
+# "externally-managed-environment" errors and symlink the CLI onto PATH, the
+# same way bin/nedory exposes its helpers.
+#
+# Confidence: the pip path is Google's documented install, and the Python API
+# lists Android aarch64 + x86_64 support — but a matching wheel for *Termux*
+# aarch64 isn't something this script can verify before you run it. If pip can't
+# find a compatible wheel, stop and send the exact error; the fallback is a
+# Bazel source build, which is a much bigger job.
+set -e
+
+# Pin a known release; override with `install-litert-lm 0.15.0` or
+# LITERT_LM_VERSION=… to bump. Bumping this is the whole "upgrade".
+LITERT_LM_VERSION="${1:-${LITERT_LM_VERSION:-0.14.0}}"
+
+LRT_HOME="${LITERT_LM_HOME:-$HOME/.litert-lm}"
+BIN_DIR="${PREFIX:-$HOME/.local}/bin"
+
+echo "◢ [1/4] Ensuring Python 3.10+ is available…"
+if [ -n "$PREFIX" ] && command -v pkg >/dev/null 2>&1; then
+  # Termux: `python` is python3 here.
+  command -v python3 >/dev/null 2>&1 || pkg install -y python
+fi
+if ! command -v python3 >/dev/null 2>&1; then
+  echo "✗ python3 not found and couldn't auto-install it."
+  echo "  Debian/Ubuntu: sudo apt install -y python3 python3-venv python3-pip"
+  exit 1
+fi
+PYV="$(python3 -c 'import sys; print("%d.%d" % sys.version_info[:2])')"
+echo "  python3 $PYV detected"
+python3 -c 'import sys; sys.exit(0 if sys.version_info[:2] >= (3, 10) else 1)' || {
+  echo "✗ litert-lm needs Python 3.10+, found $PYV. Upgrade Python and re-run."
+  exit 1
+}
+
+echo "◢ [2/4] Creating an isolated venv at $LRT_HOME…"
+if [ ! -d "$LRT_HOME" ]; then
+  python3 -m venv "$LRT_HOME" || {
+    echo "✗ venv creation failed — on Debian/Ubuntu you may need: sudo apt install -y python3-venv"
+    exit 1
+  }
+fi
+"$LRT_HOME/bin/python" -m pip install --quiet --upgrade pip
+
+echo "◢ [3/4] Installing litert-lm==$LITERT_LM_VERSION from PyPI…"
+"$LRT_HOME/bin/pip" install --upgrade "litert-lm==$LITERT_LM_VERSION"
+
+# Expose the CLI on PATH (mirrors bin/nedory's symlink-into-BIN_DIR pattern, so
+# it's a bare `litert-lm` command from anywhere, like the other helpers).
+mkdir -p "$BIN_DIR"
+if [ -x "$LRT_HOME/bin/litert-lm" ]; then
+  ln -sf "$LRT_HOME/bin/litert-lm" "$BIN_DIR/litert-lm"
+else
+  echo "✗ Installed, but $LRT_HOME/bin/litert-lm wasn't produced — the package"
+  echo "  may expose a different entrypoint. Check: ls $LRT_HOME/bin"
+  exit 1
+fi
+
+echo "◢ [4/4] Verifying…"
+if ! "$BIN_DIR/litert-lm" --version 2>/dev/null; then
+  "$BIN_DIR/litert-lm" --help >/dev/null 2>&1 \
+    || echo "⚠ litert-lm installed but --version/--help didn't run cleanly — check above."
+fi
+echo "  litert-lm on PATH at: $BIN_DIR/litert-lm"
+
+cat <<EOF
+
+✓ LiteRT-LM $LITERT_LM_VERSION installed.
+
+Next steps (exact flags drift between releases — check \`litert-lm serve --help\`
+and \`litert-lm run --help\` for your version; these are the v0.14-era shapes):
+
+  1. Pull an on-device model. E2B is Nedory's current default; E4B is the
+     upgrade (bigger, better, already used on the llama.cpp path). First run
+     downloads the .litertlm bundle:
+       litert-lm run --from-huggingface-repo=litert-community/gemma-4-E2B-it-litert-lm \\
+         gemma-4-E2B-it.litertlm --prompt "hi"
+     For the upgrade, swap in: litert-community/gemma-4-E4B-it-litert-lm
+
+  2. Start the OpenAI-compatible server Nedory talks to, in tmux so Android
+     doesn't kill it. Port 9379 matches Settings → litertlmBaseUrl:
+       tmux new-session -d -s litert-lm \\
+         "litert-lm serve --port 9379 gemma-4-E2B-it.litertlm"
+     (reattach with: tmux attach -t litert-lm)
+
+  3. Confirm serve actually picked up the GPU — the whole point of upgrading.
+     On the S25, watch the serve startup log for a GPU/Adreno/OpenCL backend
+     line instead of CPU. If text serve is still CPU-only, that's LiteRT-LM
+     issue #1929 — GPU auto-selection lands for audio/vision first.
+
+  4. In Nedory: Settings → set the litert-lm model id to match the served
+     model's name (see litert-lm's /v1/models output). It's then always
+     selectable in the Chat model picker, even before serve is running.
+EOF
