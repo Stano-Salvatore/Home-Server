@@ -17,18 +17,23 @@ ROOT="$(cd "$(dirname "$SELF")/.." && pwd)"
 cd "$ROOT"
 
 # Self-heal: symlink every other bin/ script onto PATH too, so new helper
-# scripts (get-zim, install-vulkan-llama, ...) become bare commands the
-# moment `nedory` is next run after a `git pull` — no separate manual
-# symlink step needed for each one we add later.
+# scripts (get-zim, install-vulkan-llama, ...) become bare commands with no
+# separate manual symlink step for each one we add later. Defined as a function
+# so `nedory update` can re-run it *after* git pull — otherwise a script added
+# in that pull isn't symlinked until the next nedory run, so it's still
+# "command not found" on the very run that fetched it.
 BIN_DIR="${PREFIX:-$HOME/.local}/bin"
-mkdir -p "$BIN_DIR" 2>/dev/null || true
-for script in "$ROOT"/bin/*; do
-  name="$(basename "$script")"
-  [ -x "$script" ] || continue
-  target="$BIN_DIR/$name"
-  [ -L "$target" ] && [ "$(readlink -f "$target" 2>/dev/null)" = "$script" ] && continue
-  ln -sf "$script" "$target" 2>/dev/null || true
-done
+relink_helpers() {
+  mkdir -p "$BIN_DIR" 2>/dev/null || true
+  for script in "$ROOT"/bin/*; do
+    name="$(basename "$script")"
+    [ -x "$script" ] || continue
+    target="$BIN_DIR/$name"
+    [ -L "$target" ] && [ "$(readlink -f "$target" 2>/dev/null)" = "$script" ] && continue
+    ln -sf "$script" "$target" 2>/dev/null || true
+  done
+}
+relink_helpers
 
 # Optional per-device config (S21_SSH, S21_OLLAMA, S21_KIWIX, etc.).
 [ -f "$ROOT/.nedory.env" ] && . "$ROOT/.nedory.env"
@@ -80,6 +85,7 @@ command -v termux-wake-lock >/dev/null 2>&1 && termux-wake-lock || true
 if [ "$1" = "update" ]; then
   echo "◢ Nedory: pulling the latest…"
   git pull
+  relink_helpers   # re-symlink now that the pull may have added new bin/ helpers
   npm install
   npm run build
 fi
