@@ -27,7 +27,13 @@ async function allocatePort(): Promise<number> {
   throw new Error("No free port available for llama.cpp server");
 }
 
-async function waitForHealth(port: number, timeoutMs = 30000): Promise<boolean> {
+// Large models are slow to come up — a multi-GB GGUF plus (on the OpenCL/Adreno
+// backend) one-time kernel compilation can take ~40s+ before /health responds.
+// 30s was too short and left the server loading in tmux while Nedory marked it
+// stopped. Give startup a generous window; the caller's own probes use a short one.
+const START_HEALTH_TIMEOUT_MS = 120_000;
+
+async function waitForHealth(port: number, timeoutMs = START_HEALTH_TIMEOUT_MS): Promise<boolean> {
   const start = Date.now();
   while (Date.now() - start < timeoutMs) {
     try {
@@ -121,7 +127,7 @@ export async function startServer(opts: {
 
   if (!healthy) {
     throw new Error(
-      `llama.cpp server did not become healthy within 30s on port ${port}. Check that '${settings.llamaCppBinPath}' and the model path are correct.`,
+      `llama.cpp server did not become healthy within ${START_HEALTH_TIMEOUT_MS / 1000}s on port ${port}. Check that '${settings.llamaCppBinPath}' and the model path are correct.`,
     );
   }
 
