@@ -103,9 +103,12 @@ export function GraphTab() {
     editModeRef.current = editMode;
   }, [editMode]);
   useEffect(() => {
-    const p = loadPrefs();
-    setPrefs(p);
-    prefsRef.current = p;
+    const t = setTimeout(() => {
+      const p = loadPrefs();
+      setPrefs(p);
+      prefsRef.current = p;
+    }, 0);
+    return () => clearTimeout(t);
   }, []);
   useEffect(() => {
     prefsRef.current = prefs;
@@ -119,8 +122,11 @@ export function GraphTab() {
   useEffect(() => {
     selectedIdRef.current = selected?.id ?? null;
     kickRef.current();
-    setScopePrefix(selected?.label ?? "");
-    setScopeMsg(null);
+    const t = setTimeout(() => {
+      setScopePrefix(selected?.label ?? "");
+      setScopeMsg(null);
+    }, 0);
+    return () => clearTimeout(t);
   }, [selected]);
 
   const graphNode = (id: string) => nodesRef.current.find((n) => n.id === id);
@@ -177,14 +183,14 @@ export function GraphTab() {
     const canvas = canvasRef.current;
     const cx = (canvas?.clientWidth ?? 800) / 2;
     const cy = (canvas?.clientHeight ?? 560) / 2;
-    for (const n of nodesRef.current) {
-      if (n.fixed) continue;
-      n.pinned = false;
-      n.x = cx + (Math.random() - 0.5) * 320;
-      n.y = cy + (Math.random() - 0.5) * 320;
-      n.vx = 0;
-      n.vy = 0;
-    }
+    // Reassigns the whole array (new node objects) rather than mutating each
+    // node in place — same pattern the layout-settle path below (nodesRef.current
+    // = nodes) already uses for this ref.
+    nodesRef.current = nodesRef.current.map((n) =>
+      n.fixed
+        ? n
+        : { ...n, pinned: false, x: cx + (Math.random() - 0.5) * 320, y: cy + (Math.random() - 0.5) * 320, vx: 0, vy: 0 },
+    );
     window.dispatchEvent(new Event("resize"));
   }, []);
 

@@ -1,12 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
-import { loadSettings, updateSettings, pathStatus } from "@/server/settings/config";
+import { loadSettings, updateSettings, pathStatus, maskSecrets, secretsPresence } from "@/server/settings/config";
 
 export const runtime = "nodejs";
 
 export async function GET() {
   const config = loadSettings();
   return NextResponse.json({
-    config,
+    config: maskSecrets(config),
+    secretsSet: secretsPresence(config),
     status: {
       vaultPath: pathStatus(config.vaultPath),
       libraryPath: pathStatus(config.libraryPath),
@@ -25,7 +26,8 @@ export async function PUT(req: NextRequest) {
   }
 
   return NextResponse.json({
-    config,
+    config: maskSecrets(config),
+    secretsSet: secretsPresence(config),
     status: {
       vaultPath: pathStatus(config.vaultPath),
       libraryPath: pathStatus(config.libraryPath),

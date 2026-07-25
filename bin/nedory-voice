@@ -1,0 +1,230 @@
+#!/usr/bin/env bash
+# Nedory Voice — hands-free "Hey Nedory" loop for a dedicated voice phone
+# (e.g. the S21): mic in, whisper.cpp for speech-to-text, Nedory's
+# /api/voice/ask for the answer, termux-tts-speak for the reply out loud.
+#
+# Install once on that device (same pattern as bin/nedory-node):
+#   printf '%s' "$(cat nedory-voice)" > "$PREFIX/bin/nedory-voice" && chmod +x "$PREFIX/bin/nedory-voice"
+#
+# Dependencies — not auto-installed, see docs/voice-loop.md for the full
+# on-device setup (whisper.cpp build + model download take a few minutes):
+#   pkg install termux-api ffmpeg jq tmux
+#   termux-setup-storage                 # first run, grants storage + mic access
+#   whisper.cpp built with a tiny/base .en model (docs/voice-loop.md)
+#
+# Config — put in ~/.nedory-voice.env (sourced below):
+#   NEDORY_URL="http://100.x.x.x:3000"   # the dashboard phone's Tailscale IP — required
+#   WAKE_WORDS="nedory,the story"        # comma-separated, matched against the lowercased
+#                                         # transcript — whisper's tiny model can mishear a
+#                                         # made-up name, so list plausible mishearings too
+#
+# Usage:
+#   nedory-voice ask       one-shot push-to-talk — tap, ask, hear the answer
+#   nedory-voice listen    start the hands-free "Hey Nedory" loop (tmux-supervised)
+#   nedory-voice stop      stop the hands-free loop
+#   nedory-voice status    is it running?
+set -u
+
+VOICE_ENV="$HOME/.nedory-voice.env"
+[ -f "$VOICE_ENV" ] && . "$VOICE_ENV"
+
+NEDORY_URL="${NEDORY_URL:-}"
+WAKE_WORDS="${WAKE_WORDS:-nedory}"
+WHISPER_BIN="${WHISPER_BIN:-}"
+WHISPER_MODEL="${WHISPER_MODEL:-$HOME/whisper.cpp/models/ggml-tiny.en.bin}"
+WORK_DIR="$HOME/.nedory-voice"
+TMUX_SESSION="nedory-voice"
+mkdir -p "$WORK_DIR"
+
+# whisper.cpp renamed its CLI from `main` to `whisper-cli` partway through
+# 2024 — try both rather than making the user hunt down which one they built.
+if [ -z "$WHISPER_BIN" ]; then
+  for candidate in "$HOME/whisper.cpp/build/bin/whisper-cli" "$HOME/whisper.cpp/whisper-cli" "$HOME/whisper.cpp/main"; do
+    [ -x "$candidate" ] && WHISPER_BIN="$candidate" && break
+  done
+fi
+
+check_deps() {
+  local missing=0
+  for bin in termux-microphone-record termux-tts-speak ffmpeg jq curl; do
+    command -v "$bin" >/dev/null 2>&1 || { echo "✗ missing: $bin — see docs/voice-loop.md"; missing=1; }
+  done
+  [ -n "$WHISPER_BIN" ] && [ -x "$WHISPER_BIN" ] || { echo "✗ whisper.cpp binary not found — see docs/voice-loop.md"; missing=1; }
+  [ -f "$WHISPER_MODEL" ] || { echo "✗ whisper model not found at $WHISPER_MODEL"; missing=1; }
+  [ -n "$NEDORY_URL" ] || { echo "✗ NEDORY_URL not set — put it in $VOICE_ENV (e.g. http://100.x.x.x:3000)"; missing=1; }
+  [ "$missing" = 0 ] || exit 1
+}
+
+# Records $1 seconds to $2 (16kHz mono wav — what whisper.cpp wants).
+# termux-microphone-record's own -l limit (seconds) stops the recording; we
+# just wait it out plus a beat for the file to finish flushing before ffmpeg
+# reads it.
+record() {
+  local seconds="$1" out="$2" raw="$WORK_DIR/raw.m4a"
+  rm -f "$raw" "$out"
+  termux-microphone-record -f "$raw" -l "$seconds" -e aac >/dev/null 2>&1
+  sleep "$((seconds + 1))"
+  ffmpeg -y -i "$raw" -ar 16000 -ac 1 "$out" >/dev/null 2>&1
+}
+
+transcribe() {
+  local wav="$1"
+  "$WHISPER_BIN" -m "$WHISPER_MODEL" -f "$wav" -nt -otxt -of "$WORK_DIR/out" >/dev/null 2>&1
+  # Strip whisper's own non-speech markers (e.g. [BLANK_AUDIO],
+  # [MUSIC PLAYING], (wind blowing)) — on silence/noise it emits these
+  # instead of nothing, and without stripping them here a silent recording
+  # gets sent to Nedory as a literal question instead of being treated as
+  # "didn't catch anything".
+  tr '\n' ' ' <"$WORK_DIR/out.txt" 2>/dev/null \
+    | sed -E 's/\[[^]]*\]//g; s/\([^)]*\)//g' \
+    | sed 's/^ *//; s/ *$//'
+}
+
+ask_nedory() {
+  local question="$1" payload
+  payload="$(jq -n --arg t "$question" '{text:$t}')"
+  curl -sf -m 30 -X POST "$NEDORY_URL/api/voice/ask" \
+    -H "Content-Type: application/json" -d "$payload" | jq -r '.text // empty'
+}
+
+matches_wake_word() {
+  local heard_lc="$1" w
+  IFS=',' read -ra words <<<"$WAKE_WORDS"
+  for w in "${words[@]}"; do
+    case "$heard_lc" in *"${w,,}"*) return 0 ;; esac
+  done
+  return 1
+}
+
+cmd_ask() {
+  echo "◢ Recording your question (5s)…"
+  termux-tts-speak "Go ahead." >/dev/null 2>&1 || true
+  record 5 "$WORK_DIR/ptt.wav"
+  local question
+  question="$(transcribe "$WORK_DIR/ptt.wav")"
+  if [ -z "$question" ]; then
+    echo "◢ Didn't catch anything."
+    termux-tts-speak "Sorry, I didn't catch that."
+    return 1
+  fi
+  echo "◢ You said: $question"
+  local answer
+  answer="$(ask_nedory "$question")"
+  if [ -z "$answer" ]; then
+    echo "◢ No answer — is Nedory reachable at $NEDORY_URL ?"
+    termux-tts-speak "Sorry, I couldn't reach Nedory."
+    return 1
+  fi
+  echo "◢ Nedory: $answer"
+  termux-tts-speak "$answer"
+}
+
+# Polling chunks long enough to actually catch a full "Hey Nedory" — on-device
+# testing found termux-microphone-record has real startup lag (the recorder
+# isn't capturing the instant the command is issued), so a tight 3s window
+# clipped the start of the phrase and whisper hallucinated non-speech
+# ([BLANK_AUDIO], "(dramatic music)") instead of transcribing it. 5s matches
+# the duration already proven reliable for the ask() push-to-talk path. On a
+# wake-word hit, a further dedicated recording (6s, cued by "Yes?") captures
+# the actual question — trying to parse the whole "Hey Nedory, what's the
+# weather..." as one continuous utterance risks clipping the question at the
+# chunk boundary; a brief pause after the wake word (like any smart speaker)
+# is the trade-off for a first working version.
+#
+# Known limitation: whisper's tiny model can hallucinate short phrases on
+# background noise/silence, which can false-trigger this loop. No noise gate
+# yet — tune WAKE_WORDS to something distinctive, or add a VAD/Porcupine
+# front-end later if false wake-ups are frequent in practice (see
+# docs/voice-loop.md).
+listen_loop() {
+  echo "◢ Nedory Voice listening for: $WAKE_WORDS"
+  while true; do
+    record 5 "$WORK_DIR/chunk.wav"
+    local heard heard_lc
+    heard="$(transcribe "$WORK_DIR/chunk.wav")"
+    # Printed for every non-empty chunk, not just matches — without this
+    # there was no way to see what whisper actually heard while tuning
+    # WAKE_WORDS, which is exactly the debugging step the first on-device
+    # test was missing.
+    [ -n "$heard" ] && echo "· heard: \"$heard\""
+    [ -z "$heard" ] && continue
+    heard_lc="${heard,,}"
+    matches_wake_word "$heard_lc" || continue
+
+    echo "◢ heard wake word in: \"$heard\""
+    termux-tts-speak "Yes?"
+    record 6 "$WORK_DIR/question.wav"
+    local question
+    question="$(transcribe "$WORK_DIR/question.wav")"
+    if [ -z "$question" ]; then
+      echo "◢ didn't catch a question"
+      termux-tts-speak "Sorry, I didn't catch that."
+      continue
+    fi
+    echo "◢ asking: $question"
+    local answer
+    answer="$(ask_nedory "$question")"
+    if [ -z "$answer" ]; then
+      echo "◢ no answer — is Nedory reachable at $NEDORY_URL ?"
+      termux-tts-speak "Sorry, I couldn't reach Nedory."
+      continue
+    fi
+    echo "◢ answer: $answer"
+    # termux-tts-speak blocks until playback finishes, so the loop can't
+    # hear (and re-trigger on) its own reply before it resumes listening.
+    termux-tts-speak "$answer"
+  done
+}
+
+case "${1:-}" in
+  ask)
+    check_deps
+    cmd_ask
+    ;;
+  listen)
+    check_deps
+    command -v termux-wake-lock >/dev/null 2>&1 && termux-wake-lock || true
+    if command -v tmux >/dev/null 2>&1; then
+      # Detached tmux, not a bare foreground loop — Android kills backgrounded
+      # Termux tabs (the same reason bin/nedory runs the dashboard in tmux).
+      tmux kill-session -t "$TMUX_SESSION" 2>/dev/null || true
+      tmux new-session -d -s "$TMUX_SESSION" "exec '$0' listen-fg"
+      echo "◢ Nedory Voice listening in tmux session '$TMUX_SESSION' — reattach with: tmux attach -t $TMUX_SESSION"
+    else
+      echo "⚠ tmux not found — running in this shell's foreground; Android may kill it once backgrounded. pkg install tmux is recommended."
+      listen_loop
+    fi
+    ;;
+  listen-fg)
+    check_deps
+    listen_loop
+    ;;
+  stop)
+    command -v tmux >/dev/null 2>&1 && tmux kill-session -t "$TMUX_SESSION" 2>/dev/null || true
+    echo "◢ Nedory Voice stopped."
+    ;;
+  status)
+    if command -v tmux >/dev/null 2>&1 && tmux has-session -t "$TMUX_SESSION" 2>/dev/null; then
+      echo "◢ Nedory Voice: listening (tmux session '$TMUX_SESSION')"
+    else
+      echo "◢ Nedory Voice: not running"
+    fi
+    ;;
+  *)
+    cat <<'USAGE'
+Nedory Voice — hands-free voice loop for a dedicated voice phone.
+
+Usage:
+  nedory-voice ask       one-shot push-to-talk: record a question, speak the answer
+  nedory-voice listen    start the "Hey Nedory" hands-free loop (tmux-supervised)
+  nedory-voice stop      stop the hands-free loop
+  nedory-voice status    check whether it's running
+
+Config (put in ~/.nedory-voice.env):
+  NEDORY_URL   e.g. http://100.x.x.x:3000   (the dashboard phone's Tailscale IP)
+  WAKE_WORDS   default "nedory" — comma-separated mishearing-tolerant list
+
+See docs/voice-loop.md for on-device setup (whisper.cpp, termux-api, model).
+USAGE
+    ;;
+esac

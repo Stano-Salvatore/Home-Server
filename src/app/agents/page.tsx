@@ -4,9 +4,11 @@ import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Plus, Trash2, Pencil } from "lucide-react";
+import { Plus, Trash2, Pencil, Wrench, Loader2 } from "lucide-react";
 import type { ModelOption } from "@/lib/types";
 import { resolveAgentOption, agentModelOnline } from "@/lib/agentModel";
+
+type McpServerConfig = { id: string; name: string; url: string; token?: string | null };
 
 type Agent = {
   id: string;
@@ -19,6 +21,8 @@ type Agent = {
   scopeId?: string | null;
   contextUrl?: string | null;
   contextToken?: string | null;
+  toolsEnabled?: boolean;
+  mcpServers?: McpServerConfig[];
 };
 type Scope = { id: string; label: string; emoji?: string };
 
@@ -190,7 +194,56 @@ function AgentForm({
   const [scopes, setScopes] = useState<Scope[]>([]);
   const [contextUrl, setContextUrl] = useState(agent?.contextUrl ?? "");
   const [contextToken, setContextToken] = useState(agent?.contextToken ?? "");
+  const [toolsEnabled, setToolsEnabled] = useState(agent?.toolsEnabled ?? false);
+  const [mcpServers, setMcpServers] = useState<McpServerConfig[]>(agent?.mcpServers ?? []);
+  const [newServerName, setNewServerName] = useState("");
+  const [newServerUrl, setNewServerUrl] = useState("");
+  const [newServerToken, setNewServerToken] = useState("");
+  const [testing, setTesting] = useState(false);
+  const [testResult, setTestResult] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+
+  async function testAndAddServer() {
+    if (!newServerUrl.trim()) return;
+    setTesting(true);
+    setTestResult(null);
+    try {
+      const res = await fetch("/api/agents/mcp-test", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url: newServerUrl.trim(), token: newServerToken.trim() || undefined }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setTestResult(`Failed: ${data.error ?? "unknown error"}`);
+        return;
+      }
+      const toolNames = (data.tools ?? []).map((t: { name: string }) => t.name);
+      setMcpServers((prev) => [
+        ...prev,
+        {
+          id: `mcp_${Date.now().toString(36)}`,
+          name: newServerName.trim() || new URL(newServerUrl.trim()).hostname,
+          url: newServerUrl.trim(),
+          token: newServerToken.trim() || null,
+        },
+      ]);
+      setTestResult(
+        toolNames.length > 0 ? `Found ${toolNames.length} tools: ${toolNames.join(", ")}` : "Connected, but no tools found.",
+      );
+      setNewServerName("");
+      setNewServerUrl("");
+      setNewServerToken("");
+    } catch (err) {
+      setTestResult(`Failed: ${err instanceof Error ? err.message : String(err)}`);
+    } finally {
+      setTesting(false);
+    }
+  }
+
+  function removeServer(id: string) {
+    setMcpServers((prev) => prev.filter((s) => s.id !== id));
+  }
 
   useEffect(() => {
     fetch("/api/brain/scopes")
@@ -215,6 +268,8 @@ function AgentForm({
       scopeId: scopeId || null,
       contextUrl: contextUrl.trim() || null,
       contextToken: contextToken.trim() || null,
+      toolsEnabled,
+      mcpServers,
     };
     await fetch("/api/agents", {
       method: agent ? "PUT" : "POST",
@@ -316,6 +371,88 @@ function AgentForm({
             onChange={(e) => setContextToken(e.target.value)}
           />
         </div>
+
+        <div className="border-t border-[var(--border)] pt-2 mt-1 flex flex-col gap-2">
+          <label className="flex items-center gap-2 text-xs text-ink-dim">
+            <input
+              type="checkbox"
+              checked={toolsEnabled}
+              onChange={(e) => setToolsEnabled(e.target.checked)}
+            />
+            <Wrench size={12} /> Enable tool calling
+          </label>
+          <p className="text-xs text-ink-dim">
+            One small-model call per message decides which tools (if any) are relevant, then Nedory
+            runs them and hands the results back as context. Built-in Nedory tools (fleet status,
+            hardware, service health) are always included — add MCP servers below for more
+            (e.g. a health-tracking API).
+          </p>
+
+          {toolsEnabled && (
+            <>
+              {mcpServers.length > 0 && (
+                <div className="flex flex-col gap-1">
+                  {mcpServers.map((s) => (
+                    <div
+                      key={s.id}
+                      className="flex items-center gap-2 rounded bg-[var(--surface-2)] border border-[var(--border)] px-2 py-1.5 text-xs"
+                    >
+                      <span className="text-ink flex-1 truncate">{s.name}</span>
+                      <span className="text-ink-dim truncate max-w-[180px]">{s.url}</span>
+                      <button
+                        onClick={() => removeServer(s.id)}
+                        className="text-ink-dim hover:text-[var(--color-term-red)]"
+                      >
+                        <Trash2 size={12} />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+              <div className="flex flex-col gap-1.5 rounded border border-dashed border-[var(--border)] p-2">
+                <div className="flex gap-1.5">
+                  <input
+                    className="w-24 rounded bg-[var(--surface-2)] border border-[var(--border)] px-2 py-1 text-xs text-ink focus:outline-none focus:border-accent"
+                    placeholder="Name"
+                    value={newServerName}
+                    onChange={(e) => setNewServerName(e.target.value)}
+                  />
+                  <input
+                    className="flex-1 rounded bg-[var(--surface-2)] border border-[var(--border)] px-2 py-1 text-xs text-ink focus:outline-none focus:border-accent"
+                    placeholder="MCP server URL (Streamable HTTP)"
+                    value={newServerUrl}
+                    onChange={(e) => setNewServerUrl(e.target.value)}
+                  />
+                </div>
+                <input
+                  className="rounded bg-[var(--surface-2)] border border-[var(--border)] px-2 py-1 text-xs text-ink focus:outline-none focus:border-accent"
+                  placeholder="Bearer token (optional)"
+                  type="password"
+                  value={newServerToken}
+                  onChange={(e) => setNewServerToken(e.target.value)}
+                />
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="secondary"
+                    onClick={() => void testAndAddServer()}
+                    disabled={!newServerUrl.trim() || testing}
+                  >
+                    {testing ? <Loader2 size={12} className="animate-spin" /> : <Plus size={12} />}
+                    Test &amp; add
+                  </Button>
+                  {testResult && (
+                    <span
+                      className={`text-[11px] ${testResult.startsWith("Failed") ? "text-[var(--color-term-red)]" : "text-ink-dim"}`}
+                    >
+                      {testResult}
+                    </span>
+                  )}
+                </div>
+              </div>
+            </>
+          )}
+        </div>
+
         <div className="flex gap-2">
           <Button onClick={save} disabled={saving || !name.trim() || !modelTag}>
             {saving ? "saving…" : agent ? "save" : "create agent"}

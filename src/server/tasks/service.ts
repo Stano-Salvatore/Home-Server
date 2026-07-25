@@ -3,16 +3,18 @@ import { db } from "@/server/db/client";
 import { tasks, taskRuns } from "@/server/db/schema";
 import { newId } from "@/server/util/hash";
 import { reconcile } from "./scheduler";
+import type { BackendKind } from "@/server/backends/types";
 
 export type TaskInput = {
   name: string;
   prompt: string;
-  backend: "ollama" | "llamacpp";
+  backend: BackendKind;
   modelId: string;
-  triggerType: "manual" | "cron" | "file_watch";
+  triggerType: "manual" | "cron" | "file_watch" | "once";
   cronExpression?: string | null;
   watchPath?: string | null;
   watchGlob?: string | null;
+  runAt?: number | null; // triggerType "once": unix seconds
   saveToVault?: boolean;
   vaultFilenameTemplate?: string | null;
   enabled?: boolean;
@@ -39,6 +41,7 @@ export function createTask(input: TaskInput) {
       cronExpression: input.cronExpression ?? null,
       watchPath: input.watchPath ?? null,
       watchGlob: input.watchGlob ?? null,
+      runAt: input.runAt ?? null,
       saveToVault: input.saveToVault ?? false,
       vaultFilenameTemplate: input.vaultFilenameTemplate ?? null,
       enabled: input.enabled ?? true,

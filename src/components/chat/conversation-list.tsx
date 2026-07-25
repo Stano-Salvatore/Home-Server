@@ -5,6 +5,10 @@ import { useRouter, usePathname } from "next/navigation";
 import { Plus, Search, Pencil, Trash2, Check, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ModelPicker } from "./model-picker";
+import { useSidebarCollapsed } from "@/lib/useSidebarCollapsed";
+import { useMobileNavOpen } from "@/lib/useMobileNavOpen";
+import { CONVERSATIONS_CHANGED_EVENT } from "@/lib/useChatStream";
+import type { ChatBackend } from "@/lib/types";
 
 type Conversation = {
   id: string;
@@ -17,7 +21,7 @@ type Conversation = {
 export function ConversationList() {
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [creating, setCreating] = useState(false);
-  const [pending, setPending] = useState<{ backend: "ollama" | "llamacpp"; modelId: string } | null>(
+  const [pending, setPending] = useState<{ backend: ChatBackend; modelId: string } | null>(
     null,
   );
   const [query, setQuery] = useState("");
@@ -25,6 +29,16 @@ export function ConversationList() {
   const [editTitle, setEditTitle] = useState("");
   const router = useRouter();
   const pathname = usePathname();
+  // Slides away together with the nav rail — the hamburger clears the whole
+  // left side, not just the rail.
+  const [collapsed] = useSidebarCollapsed();
+  // Mobile: a real off-canvas drawer synced to the same hamburger as the nav
+  // rail, positioned right after it (Sidebar's rail is 14rem wide). Previously
+  // this had no mobile treatment at all — it stayed permanently in-flow at
+  // w-64, which on a real phone (not just the desktop-focused breakpoint
+  // testing) left a dead reserved gutter beside the chat column instead of
+  // showing the list, since nothing was actually toggling it there.
+  const [mobileOpen, setMobileOpen] = useMobileNavOpen();
 
   function fetchConversations() {
     return fetch("/api/chat/conversations")
@@ -40,6 +54,14 @@ export function ConversationList() {
     fetchConversations().then((list) => setConversations(list));
   }, [pathname]);
 
+  // A stream completing elsewhere (auto-title landing, updatedAt bumping for
+  // recency order) doesn't change the pathname, so it needs its own signal.
+  useEffect(() => {
+    const onChanged = () => fetchConversations().then(setConversations);
+    window.addEventListener(CONVERSATIONS_CHANGED_EVENT, onChanged);
+    return () => window.removeEventListener(CONVERSATIONS_CHANGED_EVENT, onChanged);
+  }, []);
+
   async function createConversation() {
     if (!pending) return;
     const res = await fetch("/api/chat/conversations", {
@@ -50,6 +72,7 @@ export function ConversationList() {
     const data = await res.json();
     setCreating(false);
     setPending(null);
+    setMobileOpen(false);
     refresh();
     router.push(`/chat/${data.conversation.id}`);
   }
@@ -78,14 +101,39 @@ export function ConversationList() {
     : conversations;
 
   return (
-    <div className="w-64 shrink-0 border-r border-neutral-900 h-full flex flex-col p-3 gap-2">
+    <div
+      // Mobile: a real off-canvas drawer (fixed, translated fully offscreen
+      // by default), positioned right after Sidebar's 14rem-wide rail so the
+      // two form one continuous sliding panel, opened by the same hamburger
+      // (useMobileNavOpen) — Sidebar's own backdrop (z-40) dims behind both.
+      // Desktop: back to the original sticky-in-flow column, collapsing via
+      // the separate persistent `collapsed` preference instead.
+      //
+      // z-45: above Sidebar's mobile backdrop (z-40) so the drawer isn't
+      // dimmed, below the nav rail itself (z-50, though they don't actually
+      // overlap spatially) — and, on desktop, still above the chat column's
+      // viewport-fixed pane (z-10; see chat/layout.tsx) since that pane's box
+      // extends underneath wherever this list sits.
+      // -translate-x-[30rem], not -translate-x-full: this panel sits at
+      // left:14rem (after Sidebar's rail), so a plain "-full" only shifts it
+      // by its OWN width (16rem) — its right edge would land at x=14rem,
+      // still covering the 0–14rem strip (including the hamburger button)
+      // instead of clearing the viewport. 30rem = both panels' combined
+      // width, landing the right edge exactly at x=0, matching Sidebar's own
+      // "-translate-x-full" (which correctly clears fully since IT sits at
+      // left:0).
+      className={`fixed md:sticky top-0 md:top-auto left-56 md:left-auto z-[45] w-64 shrink-0 border-r border-neutral-900 h-screen md:h-full flex flex-col p-3 gap-2 transition-transform md:transition-all duration-200 ${
+        mobileOpen ? "translate-x-0" : "-translate-x-[30rem]"
+      } md:translate-x-0 ${collapsed ? "md:-ml-64 md:invisible" : ""}`}
+      style={{ background: "var(--bg)" }}
+    >
       {!creating ? (
         <Button variant="secondary" onClick={() => setCreating(true)}>
           <Plus size={14} /> New Chat
         </Button>
       ) : (
         <div className="flex flex-col gap-2 border border-neutral-800 rounded-md p-2">
-          <ModelPicker value={pending} onChange={(v) => setPending(v)} />
+          <ModelPicker value={pending} onChange={(v) => setPending(v)} autoDefault />
           <div className="flex gap-2">
             <Button onClick={createConversation} disabled={!pending}>
               Start
@@ -140,7 +188,10 @@ export function ConversationList() {
           return (
             <li key={c.id} className="group flex items-center">
               <button
-                onClick={() => router.push(`/chat/${c.id}`)}
+                onClick={() => {
+                  setMobileOpen(false);
+                  router.push(`/chat/${c.id}`);
+                }}
                 className={`flex-1 min-w-0 text-left rounded-md px-2 py-1.5 text-sm truncate ${
                   active
                     ? "bg-neutral-800 text-white"

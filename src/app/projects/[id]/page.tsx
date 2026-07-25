@@ -6,6 +6,7 @@ import Link from "next/link";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { ModelPicker } from "@/components/chat/model-picker";
+import type { ChatBackend } from "@/lib/types";
 
 type Project = { id: string; name: string; emoji: string | null; instructions: string | null };
 type Conversation = { id: string; title: string; updatedAt: number };
@@ -20,7 +21,7 @@ export default function ProjectDetailPage() {
   const [emoji, setEmoji] = useState("");
   const [instructions, setInstructions] = useState("");
   const [savedAt, setSavedAt] = useState<number | null>(null);
-  const [model, setModel] = useState<{ backend: "ollama" | "llamacpp"; modelId: string } | null>(null);
+  const [model, setModel] = useState<{ backend: ChatBackend; modelId: string } | null>(null);
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {

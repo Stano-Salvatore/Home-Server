@@ -1,5 +1,5 @@
-import { getSetting, setSetting } from "@/server/settings/config";
 import { newId } from "@/server/util/hash";
+import { readJsonBlob, writeJsonBlob, isArray } from "@/server/settings/jsonBlob";
 
 // User-drawn nodes in the Brain graph — labels, colours and a link to a parent
 // node — so the mesh isn't limited to what's auto-derived from files/agents.
@@ -14,18 +14,11 @@ export type CustomNode = {
 const KEY = "brain_custom_nodes";
 
 export function listCustomNodes(): CustomNode[] {
-  const raw = getSetting(KEY);
-  if (!raw) return [];
-  try {
-    const parsed = JSON.parse(raw) as CustomNode[];
-    return Array.isArray(parsed) ? parsed : [];
-  } catch {
-    return [];
-  }
+  return readJsonBlob<CustomNode[]>(KEY, [], isArray as (v: unknown) => v is CustomNode[]);
 }
 
 function save(nodes: CustomNode[]) {
-  setSetting(KEY, JSON.stringify(nodes));
+  writeJsonBlob(KEY, nodes);
 }
 
 export function addCustomNode(input: Partial<CustomNode>): CustomNode {

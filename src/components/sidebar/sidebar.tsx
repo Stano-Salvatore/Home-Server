@@ -3,6 +3,8 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useSidebarCollapsed } from "@/lib/useSidebarCollapsed";
+import { useMobileNavOpen } from "@/lib/useMobileNavOpen";
 import {
   MessageSquare,
   Bot,
@@ -15,22 +17,33 @@ import {
   FolderKanban,
   Server,
   Settings,
+  Telescope,
   Menu,
   X,
+  LogOut,
 } from "lucide-react";
 
-const NAV_ITEMS = [
-  { href: "/chat", label: "chat", icon: MessageSquare },
-  { href: "/projects", label: "projects", icon: FolderKanban },
-  { href: "/agents", label: "agents", icon: Bot },
-  { href: "/council", label: "council", icon: Users },
-  { href: "/brain", label: "brain", icon: BrainCircuit },
-  { href: "/cookbook", label: "cookbook", icon: ChefHat },
-  { href: "/nodes", label: "nodes", icon: Server },
-  { href: "/library", label: "bibliotheca", icon: Library },
-  { href: "/tasks", label: "tasks", icon: ListChecks },
-  { href: "/files", label: "files", icon: FolderOpenDot },
-  { href: "/settings", label: "settings", icon: Settings },
+// Grouped like Odysseus's rail: thin separators between clusters of
+// related tools instead of one long flat list.
+const NAV_GROUPS = [
+  [
+    { href: "/chat", label: "chat", icon: MessageSquare },
+    { href: "/projects", label: "projects", icon: FolderKanban },
+    { href: "/agents", label: "agents", icon: Bot },
+    { href: "/council", label: "council", icon: Users },
+  ],
+  [
+    { href: "/brain", label: "brain", icon: BrainCircuit },
+    { href: "/research", label: "deep research", icon: Telescope },
+    { href: "/cookbook", label: "cookbook", icon: ChefHat },
+    { href: "/nodes", label: "nodes", icon: Server },
+    { href: "/library", label: "bibliotheca", icon: Library },
+  ],
+  [
+    { href: "/tasks", label: "tasks", icon: ListChecks },
+    { href: "/files", label: "files", icon: FolderOpenDot },
+    { href: "/settings", label: "settings", icon: Settings },
+  ],
 ];
 
 type Health = { online: number; total: number; services: number; servicesOnline: number };
@@ -84,9 +97,54 @@ function StatusRow() {
   );
 }
 
+// Only rendered once we know a dashboard password is actually set — most
+// installs never turn this on, and a logout button with nothing to log out
+// of is just confusing chrome.
+function LogoutButton() {
+  const [enabled, setEnabled] = useState(false);
+
+  useEffect(() => {
+    let alive = true;
+    fetch("/api/auth/status")
+      .then((r) => r.json())
+      .then((d) => {
+        if (alive) setEnabled(!!d.enabled);
+      })
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  if (!enabled) return null;
+  return (
+    <button
+      onClick={() => {
+        fetch("/api/auth/logout", { method: "POST" }).finally(() => {
+          window.location.href = "/login";
+        });
+      }}
+      className="flex items-center gap-2 px-2 py-1.5 text-[11px] text-ink-dim hover:text-ink"
+    >
+      <LogOut size={12} /> log out
+    </button>
+  );
+}
+
 export function Sidebar() {
   const pathname = usePathname();
-  const [open, setOpen] = useState(false);
+  // Shared with the chat conversation list — on mobile the hamburger opens
+  // both as one drawer, not just the nav rail (see useMobileNavOpen).
+  const [open, setOpen] = useMobileNavOpen();
+  // Desktop-only: the rail slides away entirely, Odysseus-style, leaving a
+  // floating hamburger to bring it back. Mobile keeps the off-canvas drawer.
+  // Shared with the chat conversation list so both clear together.
+  const [collapsed, setCollapsedPersistent] = useSidebarCollapsed();
+
+  // The login page renders its own centered layout — no nav chrome to leak
+  // (every link on it would just bounce back to /login unauthenticated
+  // anyway, via proxy.ts).
+  if (pathname === "/login") return null;
 
   return (
     <>
@@ -98,8 +156,8 @@ export function Sidebar() {
         <button onClick={() => setOpen(true)} aria-label="Open menu" className="p-1 text-ink">
           <Menu size={20} />
         </button>
-        <span className="text-[15px] font-semibold tracking-tight text-ink flex items-center gap-1.5">
-          <span className="text-accent">◢</span> home_server
+        <span className="text-[15px] font-semibold tracking-tight text-accent flex items-center gap-1.5">
+          <span aria-hidden>◢</span> Nedory
         </span>
       </div>
 
@@ -111,19 +169,42 @@ export function Sidebar() {
         />
       )}
 
+      {/* Floating reopen button once the desktop rail has slid away. */}
+      {collapsed && (
+        <button
+          onClick={() => setCollapsedPersistent(false)}
+          aria-label="Open sidebar"
+          className="hidden md:flex fixed top-3 left-3 z-30 p-1.5 rounded-md border text-ink-dim hover:text-ink"
+          style={{ background: "var(--surface)", borderColor: "var(--border)" }}
+        >
+          <Menu size={18} />
+        </button>
+      )}
+
       <nav
-        className={`w-56 shrink-0 h-screen border-r flex flex-col py-4 px-3 z-50 fixed md:sticky top-0 left-0 transition-transform duration-200 ${
+        // left-0 must not reach desktop: `sticky left-0` horizontally re-pins
+        // the rail to the viewport edge, cancelling the -ml-56 slide-away.
+        className={`w-56 shrink-0 h-screen border-r flex flex-col py-4 px-3 z-50 fixed md:sticky top-0 left-0 md:left-auto transition-all duration-200 ${
           open ? "translate-x-0" : "-translate-x-full"
-        } md:translate-x-0`}
+        } md:translate-x-0 ${collapsed ? "md:-ml-56" : "md:ml-0"}`}
         style={{ background: "var(--surface)", borderColor: "var(--border)" }}
       >
         <div className="px-2 mb-6 flex items-start justify-between">
-          <div>
-            <div className="text-[15px] font-semibold tracking-tight text-ink flex items-center gap-1.5">
-              <span className="text-accent">◢</span> home_server
-            </div>
-            <div className="text-[11px] text-ink-dim mt-0.5">
-              <span className="text-accent">~</span> local ai workspace
+          <div className="flex items-start gap-2.5">
+            <button
+              onClick={() => setCollapsedPersistent(true)}
+              aria-label="Collapse sidebar"
+              className="hidden md:block p-0.5 mt-0.5 text-ink-dim hover:text-ink"
+            >
+              <Menu size={17} />
+            </button>
+            <div>
+              <div className="text-[15px] font-semibold tracking-tight text-accent flex items-center gap-1.5">
+                <span aria-hidden>◢</span> Nedory
+              </div>
+              <div className="text-[11px] text-ink-dim mt-0.5">
+                <span className="text-accent">~</span> yours, fully local
+              </div>
             </div>
           </div>
           <button
@@ -134,32 +215,39 @@ export function Sidebar() {
             <X size={18} />
           </button>
         </div>
-        <ul className="flex flex-col gap-0.5 overflow-y-auto">
-          {NAV_ITEMS.map(({ href, label, icon: Icon }) => {
-            const active = pathname === href || pathname.startsWith(href + "/");
-            return (
-              <li key={href}>
-                <Link
-                  href={href}
-                  onClick={() => setOpen(false)}
-                  className={`group flex items-center gap-2.5 rounded-md px-3 py-2 text-sm transition-colors border-l-2 ${
-                    active
-                      ? "border-accent text-ink"
-                      : "border-transparent text-ink-dim hover:text-ink"
-                  }`}
-                  style={active ? { background: "var(--surface-2)" } : undefined}
-                >
-                  <Icon
-                    size={15}
-                    strokeWidth={2}
-                    className={active ? "text-accent" : "text-ink-dim group-hover:text-ink"}
-                  />
-                  {label}
-                </Link>
-              </li>
-            );
-          })}
-        </ul>
+        <div className="flex flex-col overflow-y-auto">
+          {NAV_GROUPS.map((group, gi) => (
+            <ul
+              key={gi}
+              className={`flex flex-col gap-0.5 ${gi > 0 ? "mt-2 pt-2 border-t" : ""}`}
+              style={gi > 0 ? { borderColor: "var(--border)" } : undefined}
+            >
+              {group.map(({ href, label, icon: Icon }) => {
+                const active = pathname === href || pathname.startsWith(href + "/");
+                return (
+                  <li key={href}>
+                    <Link
+                      href={href}
+                      onClick={() => setOpen(false)}
+                      className={`group flex items-center gap-2.5 rounded-md px-3 py-2 text-sm transition-colors ${
+                        active ? "text-accent" : "text-ink-dim hover:text-ink"
+                      }`}
+                      style={active ? { background: "rgba(224, 108, 117, 0.10)" } : undefined}
+                    >
+                      <Icon
+                        size={15}
+                        strokeWidth={2}
+                        className={active ? "text-accent" : "text-ink-dim group-hover:text-ink"}
+                      />
+                      {label}
+                    </Link>
+                  </li>
+                );
+              })}
+            </ul>
+          ))}
+        </div>
+        <LogoutButton />
         <StatusRow />
       </nav>
     </>

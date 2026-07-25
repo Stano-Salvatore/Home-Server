@@ -2,11 +2,13 @@ import { eq } from "drizzle-orm";
 import { db } from "@/server/db/client";
 import { brainDocuments, brainChunks } from "@/server/db/schema";
 import { chunkText, estimateTokenCount } from "./chunker";
+import { cleanNoteContent } from "./cleanText";
 import { embedTexts } from "./embeddings";
 import { addToIndex, removeDocumentFromIndex, floatsToBuffer, conversationIdOf } from "./vectorStore";
+import { ftsInsertChunks, ftsDeleteDocument } from "./lexical";
 import { sha1, newId } from "@/server/util/hash";
 
-export type IngestSourceType = "obsidian" | "library" | "upload" | "manual" | "chat";
+export type IngestSourceType = "obsidian" | "library" | "upload" | "manual" | "chat" | "research";
 
 export function getDocumentBySourcePath(sourcePath: string) {
   return db.select().from(brainDocuments).where(eq(brainDocuments.sourcePath, sourcePath)).get();
@@ -32,7 +34,11 @@ export async function ingestDocument(opts: {
   content: string;
   projectId?: string | null;
 }): Promise<{ document: typeof brainDocuments.$inferSelect; unchanged: boolean }> {
-  const contentHash = sha1(opts.content);
+  // Cleaning happens before hashing on purpose: a cleaner-version bump makes
+  // exactly the affected notes hash differently, so the next vault rescan
+  // re-chunks them (and skips notes the cleaning doesn't change).
+  const content = cleanNoteContent(opts.content);
+  const contentHash = sha1(content);
   const existing = getDocumentBySourcePath(opts.sourcePath);
 
   if (existing && existing.contentHash === contentHash) {
@@ -43,10 +49,11 @@ export async function ingestDocument(opts: {
 
   if (existing) {
     db.delete(brainChunks).where(eq(brainChunks.documentId, documentId)).run();
+    ftsDeleteDocument(documentId);
     await removeDocumentFromIndex(documentId);
   }
 
-  const chunks = chunkText(opts.content);
+  const chunks = chunkText(content);
   const embeddings = chunks.length > 0 ? await embedTexts(chunks) : [];
 
   const now = Date.now();
@@ -80,6 +87,7 @@ export async function ingestDocument(opts: {
   for (const row of chunkRows) {
     db.insert(brainChunks).values(row).run();
   }
+  ftsInsertChunks(chunkRows.map((row) => ({ id: row.id, documentId, content: row.content })));
 
   await addToIndex(
     chunkRows.map((row, i) => ({ id: row.id, documentId, embedding: embeddings[i] })),
@@ -95,5 +103,8 @@ export async function ingestDocument(opts: {
 
 export async function deleteDocument(id: string) {
   await removeDocumentFromIndex(id);
+  // The chunks row delete cascades from the document FK, but the FTS shadow
+  // table is a virtual table with no FK — it needs an explicit delete.
+  ftsDeleteDocument(id);
   db.delete(brainDocuments).where(eq(brainDocuments.id, id)).run();
 }

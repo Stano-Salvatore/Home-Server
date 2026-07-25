@@ -12,15 +12,27 @@ type Config = {
   llamaCppBinPath: string;
   llamaCppEnv: string;
   ollamaHost: string;
+  litertlmBaseUrl: string;
+  litertlmModelId: string;
   embeddingModel: string;
   embeddingHost: string;
   qdrantUrl: string;
   wikipediaProvider: string;
   kiwixUrl: string;
   wikipediaLangs: string;
+  webSearchProvider: string;
+  searxngUrl: string;
+  braveApiKey: string;
+  homeAssistantUrl: string;
+  homeAssistantToken: string;
+  dbBackupDir: string;
 };
 
 type Status = Record<"vaultPath" | "libraryPath" | "uploadsPath", { exists: boolean; writable: boolean }>;
+type SecretKey = "braveApiKey" | "homeAssistantToken";
+type SecretsSet = Record<SecretKey, boolean>;
+
+const SECRET_KEYS = new Set<string>(["braveApiKey", "homeAssistantToken"]);
 
 const FIELDS: { key: keyof Config; label: string; hint: string }[] = [
   { key: "libraryPath", label: "Library folder", hint: "Folder with your .epub / .pdf files" },
@@ -28,20 +40,30 @@ const FIELDS: { key: keyof Config; label: string; hint: string }[] = [
   { key: "llamaCppBinPath", label: "llama.cpp binary path", hint: "e.g. llama-server or /usr/local/bin/llama-server" },
   { key: "llamaCppEnv", label: "llama.cpp environment overrides (optional)", hint: "Space-separated KEY=value pairs passed to every launch, e.g. VK_ICD_FILENAMES=/data/data/com.termux/files/usr/share/vulkan/icd.d/freedreno_icd.aarch64.json — needed for Vulkan/Turnip GPU builds on Android, whose default driver silently ignores this and falls back to CPU/a crashing proprietary driver." },
   { key: "ollamaHost", label: "Ollama host", hint: "e.g. http://127.0.0.1:11434" },
+  { key: "litertlmBaseUrl", label: "litert-lm serve URL", hint: "Started manually in tmux — see the litertlm backend. Keep it 127.0.0.1 unless you know you want it reachable from other devices." },
+  { key: "litertlmModelId", label: "litert-lm default model id", hint: "The friendly name from `litert-lm import ... <model-id>`. Used when a chat's target model id isn't otherwise known." },
   { key: "embeddingModel", label: "Embedding model", hint: "Ollama model used for Brain embeddings (e.g. bge-m3, nomic-embed-text)" },
   { key: "embeddingHost", label: "Embedding host (optional)", hint: "Ollama for embeddings; blank = same as chat node. Set to this phone's own Ollama (e.g. http://127.0.0.1:11434) to keep it off the compute node." },
   { key: "qdrantUrl", label: "Qdrant URL (optional)", hint: "Blank = keep vectors in this phone's RAM. Set to a Qdrant server (e.g. http://<lenovo-ip>:6333) to hold memory off-device so it can scale to gigabytes." },
   { key: "kiwixUrl", label: "Kiwix URL(s) (offline Wikipedia)", hint: "kiwix-serve host(s). Comma-separate several to try in order — e.g. a small local ZIM first, a big one on another box as fallback." },
   { key: "wikipediaLangs", label: "Wikipedia languages", hint: "Comma-separated wiki codes, e.g. en,cs" },
+  { key: "searxngUrl", label: "SearXNG URL (optional)", hint: "Self-hosted SearXNG instance for the web search provider, e.g. http://<lenovo-ip>:8888" },
+  { key: "braveApiKey", label: "Brave Search API key (optional)", hint: "Only needed when the web search provider is Brave" },
+  { key: "homeAssistantUrl", label: "Home Assistant URL (optional)", hint: "e.g. http://<lenovo-ip>:8123 — enables the home_assistant_* tools for any agent (and voice) with tool calling on" },
+  { key: "homeAssistantToken", label: "Home Assistant long-lived access token (optional)", hint: "Home Assistant → your profile → Security → Long-Lived Access Tokens" },
+  { key: "dbBackupDir", label: "DB backup folder (optional)", hint: "Blank = data/backups next to the database. Point at a mounted network share to get nightly backups off-device." },
 ];
 
 export default function SettingsPage() {
   const [config, setConfig] = useState<Config | null>(null);
   const [status, setStatus] = useState<Status | null>(null);
+  const [secretsSet, setSecretsSet] = useState<SecretsSet | null>(null);
   const [saving, setSaving] = useState(false);
   const [savedAt, setSavedAt] = useState<number | null>(null);
   const [reindexing, setReindexing] = useState(false);
   const [reindexMsg, setReindexMsg] = useState<string | null>(null);
+  const [backingUp, setBackingUp] = useState(false);
+  const [backupMsg, setBackupMsg] = useState<string | null>(null);
 
   useEffect(() => {
     fetch("/api/settings")
@@ -49,6 +71,7 @@ export default function SettingsPage() {
       .then((data) => {
         setConfig(data.config);
         setStatus(data.status);
+        setSecretsSet(data.secretsSet);
       });
   }, []);
 
@@ -62,8 +85,13 @@ export default function SettingsPage() {
         body: JSON.stringify(config),
       });
       const data = await res.json();
+      // The server never echoes a real secret back (GET/PUT both mask it to
+      // ""), so this naturally clears any secret field just typed into —
+      // same as SecurityCard clearing its password field after save. The
+      // "set" badge below is what confirms it actually saved.
       setConfig(data.config);
       setStatus(data.status);
+      setSecretsSet(data.secretsSet);
       setSavedAt(Date.now());
     } finally {
       setSaving(false);
@@ -88,6 +116,20 @@ export default function SettingsPage() {
     }
   }
 
+  async function backupNow() {
+    setBackingUp(true);
+    setBackupMsg(null);
+    try {
+      const res = await fetch("/api/backup", { method: "POST" });
+      const d = await res.json();
+      setBackupMsg(d.error ?? `Backed up to ${d.path}`);
+    } catch (err) {
+      setBackupMsg(err instanceof Error ? err.message : String(err));
+    } finally {
+      setBackingUp(false);
+    }
+  }
+
   if (!config) {
     return <div className="p-8 text-neutral-400">Loading settings…</div>;
   }
@@ -101,6 +143,7 @@ export default function SettingsPage() {
       </p>
 
       <VaultsCard />
+      <SecurityCard />
 
       <Card className="p-5 flex flex-col gap-5">
         <div>
@@ -119,9 +162,29 @@ export default function SettingsPage() {
           </p>
         </div>
 
+        <div>
+          <label className="text-sm font-medium text-ink mb-1 block">Web search provider</label>
+          <select
+            className="w-full rounded-md bg-[var(--surface-2)] border border-[var(--border)] px-3 py-1.5 text-sm text-ink focus:outline-none focus:border-accent"
+            value={config.webSearchProvider}
+            onChange={(e) => setConfig({ ...config, webSearchProvider: e.target.value })}
+          >
+            <option value="duckduckgo">DuckDuckGo — free, no key</option>
+            <option value="searxng">SearXNG — self-hosted (set URL below)</option>
+            <option value="brave">Brave Search — needs API key</option>
+            <option value="disabled">Disabled</option>
+          </select>
+          <p className="text-xs text-ink-dim mt-1">
+            Used by the Web toggle in chat and by Deep Research. Needs internet (SearXNG needs your
+            instance reachable).
+          </p>
+        </div>
+
         {FIELDS.map(({ key, label, hint }) => {
           const pathKey = key as keyof Status;
           const st = status?.[pathKey];
+          const isSecret = SECRET_KEYS.has(key);
+          const isSet = isSecret && secretsSet?.[key as SecretKey];
           return (
             <div key={key}>
               <div className="flex items-center justify-between mb-1">
@@ -131,12 +194,15 @@ export default function SettingsPage() {
                     {st.exists && st.writable ? "OK" : "not found"}
                   </Badge>
                 )}
+                {isSecret && <Badge color={isSet ? "green" : "yellow"}>{isSet ? "set" : "not set"}</Badge>}
               </div>
               <input
+                type={isSecret ? "password" : "text"}
                 className="w-full rounded-md bg-[var(--surface-2)] border border-[var(--border)] px-3 py-1.5 text-sm text-ink focus:outline-none focus:border-accent"
                 value={config[key]}
                 onChange={(e) => setConfig({ ...config, [key]: e.target.value })}
-                placeholder={hint}
+                placeholder={isSecret ? (isSet ? "Already set — leave blank to keep it" : hint) : hint}
+                autoComplete={isSecret ? "off" : undefined}
               />
               <p className="text-xs text-neutral-600 mt-1">{hint}</p>
               {key === "embeddingModel" && (
@@ -148,6 +214,17 @@ export default function SettingsPage() {
               )}
               {key === "embeddingModel" && reindexMsg && (
                 <p className="text-xs text-ink-dim mt-1">{reindexMsg}</p>
+              )}
+              {key === "dbBackupDir" && (
+                <div className="flex items-center gap-3 mt-2">
+                  <Button variant="secondary" onClick={backupNow} disabled={backingUp}>
+                    {backingUp ? "Backing up…" : "Back up now"}
+                  </Button>
+                  <span className="text-xs text-ink-dim">Also runs automatically every night at 3am.</span>
+                </div>
+              )}
+              {key === "dbBackupDir" && backupMsg && (
+                <p className="text-xs text-ink-dim mt-1">{backupMsg}</p>
               )}
             </div>
           );
@@ -161,6 +238,95 @@ export default function SettingsPage() {
         </div>
       </Card>
     </div>
+  );
+}
+
+// Deliberately its own component with its own fetch/save, hitting
+// /api/auth/password rather than the generic /api/settings PUT — the
+// dashboard password is a distinct, security-sensitive setting (it must
+// never round-trip back in a GET response the way ordinary config fields
+// do), not part of AppConfig.
+function SecurityCard() {
+  const [enabled, setEnabled] = useState<boolean | null>(null);
+  const [password, setPassword] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [message, setMessage] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetch("/api/auth/status")
+      .then((r) => r.json())
+      .then((d) => setEnabled(!!d.enabled));
+  }, []);
+
+  async function save() {
+    setSaving(true);
+    setMessage(null);
+    try {
+      const res = await fetch("/api/auth/password", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ password }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setMessage(data.error ?? "Failed to save");
+        return;
+      }
+      setEnabled(data.enabled);
+      setPassword("");
+      setMessage(data.enabled ? "Password set — future visits will require it." : "Password protection turned off.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  if (enabled === null) return null;
+
+  return (
+    <Card className="p-5 flex flex-col gap-2 mb-6">
+      <label className="text-sm font-medium text-ink mb-1 block">Dashboard password</label>
+      <p className="text-xs text-ink-dim">
+        {enabled
+          ? "A password is currently set — every device on your network needs it to reach this dashboard."
+          : "No password set. Anyone who can reach this device on your network (Tailscale, LAN, etc.) can use the dashboard and read your notes/chats. Set one to lock it down."}
+      </p>
+      <input
+        type="password"
+        className="rounded-md bg-[var(--surface-2)] border border-[var(--border)] px-3 py-1.5 text-sm text-ink focus:outline-none focus:border-accent"
+        placeholder={enabled ? "New password (leave blank to keep current)" : "Set a password"}
+        value={password}
+        onChange={(e) => setPassword(e.target.value)}
+      />
+      <div className="flex items-center gap-2 mt-1">
+        <Button onClick={save} disabled={saving || (!password && !enabled)}>
+          {saving ? "saving…" : enabled ? "update password" : "enable password"}
+        </Button>
+        {enabled && (
+          <Button
+            variant="ghost"
+            onClick={async () => {
+              setSaving(true);
+              setMessage(null);
+              try {
+                const res = await fetch("/api/auth/password", {
+                  method: "PUT",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ password: "" }),
+                });
+                const data = await res.json();
+                setEnabled(data.enabled);
+                setMessage("Password protection turned off.");
+              } finally {
+                setSaving(false);
+              }
+            }}
+          >
+            turn off
+          </Button>
+        )}
+        {message && <span className="text-xs text-ink-dim">{message}</span>}
+      </div>
+    </Card>
   );
 }
 

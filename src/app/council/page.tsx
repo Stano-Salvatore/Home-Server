@@ -4,11 +4,12 @@ import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { ModelPicker } from "@/components/chat/model-picker";
 import { Send, Square, Sparkles, Plus, X } from "lucide-react";
-import type { ModelOption } from "@/lib/types";
+import type { ModelOption, ChatBackend } from "@/lib/types";
 import { resolveAgentOption } from "@/lib/agentModel";
 import { friendlyError } from "@/lib/friendlyError";
 import { Markdown } from "@/components/chat/markdown";
 import { ThinkingSpiral } from "@/components/ui/thinking-spiral";
+import { readSSE } from "@/lib/sse";
 
 type Agent = { id: string; name: string; emoji: string; modelTag: string; systemPrompt?: string; wikiDefault?: boolean; color?: string };
 
@@ -17,7 +18,7 @@ type Participant = {
   name: string;
   emoji: string;
   color: string;
-  backend: "ollama" | "llamacpp";
+  backend: ChatBackend;
   modelId: string;
   systemPrompt?: string;
   wikiDefault?: boolean;
@@ -38,28 +39,13 @@ async function streamAsk(
     body: JSON.stringify(body),
     signal,
   });
-  if (!res.body) throw new Error("No stream");
-  const reader = res.body.getReader();
-  const decoder = new TextDecoder();
-  let buf = "";
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    buf += decoder.decode(value, { stream: true });
-    const events = buf.split("\n\n");
-    buf = events.pop() ?? "";
-    for (const evt of events) {
-      const line = evt.replace(/^data:\s*/, "").trim();
-      if (!line) continue;
-      const data = JSON.parse(line);
-      if (data.error) onError(data.error);
-      else if (data.delta) onDelta(data.delta);
-    }
+  for await (const data of readSSE(res) as AsyncGenerator<{ error?: string; delta?: string }>) {
+    if (data.error) onError(data.error);
+    else if (data.delta) onDelta(data.delta);
   }
 }
 
 export default function CouncilPage() {
-  const [options, setOptions] = useState<ModelOption[]>([]);
   const [participants, setParticipants] = useState<Participant[]>([]);
   const [prompt, setPrompt] = useState("");
   const [wiki, setWiki] = useState(true);
@@ -70,7 +56,7 @@ export default function CouncilPage() {
   const [running, setRunning] = useState(false);
   const [addingModel, setAddingModel] = useState(false);
   const [synthesis, setSynthesis] = useState<Answer | null>(null);
-  const [judge, setJudge] = useState<{ backend: "ollama" | "llamacpp"; modelId: string } | null>(null);
+  const [judge, setJudge] = useState<{ backend: ChatBackend; modelId: string } | null>(null);
   const abortsRef = useRef<AbortController[]>([]);
   const stoppedRef = useRef(false);
 
@@ -80,7 +66,6 @@ export default function CouncilPage() {
       fetch("/api/models").then((r) => r.json()),
     ]).then(([agentsData, modelsData]) => {
       const opts: ModelOption[] = modelsData.options ?? [];
-      setOptions(opts);
       const agents: Agent[] = agentsData.agents ?? [];
       // Seed the council with every agent whose model is actually available.
       const seeded: Participant[] = [];
@@ -107,7 +92,7 @@ export default function CouncilPage() {
     setParticipants((prev) => prev.filter((p) => p.key !== key));
   }
 
-  function addModel(v: { backend: "ollama" | "llamacpp"; modelId: string; label: string }) {
+  function addModel(v: { backend: ChatBackend; modelId: string; label: string }) {
     const key = `model:${v.backend}:${v.modelId}`;
     setParticipants((prev) =>
       prev.some((p) => p.key === key)

@@ -1,5 +1,5 @@
-import { getSetting, setSetting } from "@/server/settings/config";
 import { newId } from "@/server/util/hash";
+import { readJsonBlob, writeJsonBlob, isArray } from "@/server/settings/jsonBlob";
 
 // User-drawn connections between any two nodes in the Brain graph (agent↔note,
 // note↔note, custom↔anything). Separate from the auto-derived folder edges.
@@ -8,18 +8,11 @@ export type CustomLink = { id: string; a: string; b: string };
 const KEY = "brain_custom_links";
 
 export function listCustomLinks(): CustomLink[] {
-  const raw = getSetting(KEY);
-  if (!raw) return [];
-  try {
-    const parsed = JSON.parse(raw) as CustomLink[];
-    return Array.isArray(parsed) ? parsed : [];
-  } catch {
-    return [];
-  }
+  return readJsonBlob<CustomLink[]>(KEY, [], isArray as (v: unknown) => v is CustomLink[]);
 }
 
 function save(links: CustomLink[]) {
-  setSetting(KEY, JSON.stringify(links));
+  writeJsonBlob(KEY, links);
 }
 
 export function addCustomLink(a: string, b: string): CustomLink | null {

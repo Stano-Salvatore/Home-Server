@@ -27,5 +27,8 @@ export async function bootstrap() {
   const { startScheduler } = await import("@/server/tasks/scheduler");
   startScheduler();
 
+  const { startBackupSchedule } = await import("@/server/backup/scheduler");
+  startBackupSchedule();
+
   console.log("[bootstrap] Home Server ready.");
 }

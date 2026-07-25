@@ -113,8 +113,10 @@ export async function recallChatMemory(
       projectIdIn: [conversation.projectId],
       conversationIdNe: conversation.id,
     };
-    // A modest floor keeps unrelated chatter out of the prompt.
-    return await searchBrain(query, topK, { filter, minScore: 0.55 });
+    // A modest floor keeps unrelated chatter out of the prompt. Dense-only
+    // (lexical: false): the 0.55 floor is a cosine-similarity threshold, and
+    // BM25 word matches on casual chat text would pull unrelated chatter in.
+    return await searchBrain(query, topK, { filter, minScore: 0.55, lexical: false });
   } catch {
     return [];
   }

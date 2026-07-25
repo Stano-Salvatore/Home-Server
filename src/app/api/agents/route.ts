@@ -34,8 +34,19 @@ export async function GET() {
 }
 
 export async function POST(req: NextRequest) {
-  const { name, emoji, modelTag, systemPrompt, description, wikiDefault, scopeId, contextUrl, contextToken } =
-    await req.json();
+  const {
+    name,
+    emoji,
+    modelTag,
+    systemPrompt,
+    description,
+    wikiDefault,
+    scopeId,
+    contextUrl,
+    contextToken,
+    toolsEnabled,
+    mcpServers,
+  } = await req.json();
   if (!name || !modelTag) {
     return NextResponse.json({ error: "name and modelTag are required" }, { status: 400 });
   }
@@ -49,6 +60,8 @@ export async function POST(req: NextRequest) {
     scopeId: scopeId || null,
     contextUrl: contextUrl || null,
     contextToken: contextToken || null,
+    toolsEnabled: !!toolsEnabled,
+    mcpServers: Array.isArray(mcpServers) ? mcpServers : [],
   });
   return NextResponse.json({ agent });
 }

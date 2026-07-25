@@ -17,6 +17,12 @@ const AppConfigSchema = z.object({
   // Turnip ICD JSON (see bin/install-vulkan-llama). Blank = don't override.
   llamaCppEnv: z.string().default(""),
   ollamaHost: z.string().default("http://127.0.0.1:11434"),
+  // litert-lm serve's OpenAI-compatible endpoint. Deliberately 127.0.0.1, not
+  // 0.0.0.0 — binding wider would expose an unauthenticated LLM endpoint on
+  // every network interface. Model id must match whatever `litert-lm import`
+  // named it (see the litert-lm backend module for the full launch story).
+  litertlmBaseUrl: z.string().default("http://127.0.0.1:9379"),
+  litertlmModelId: z.string().default("gemma4-e2b"),
   // bge-m3 is multilingual (EN/CS/SK and more) and embeds Czech notes far
   // better than the English-centric nomic-embed-text default used to.
   embeddingModel: z.string().default("bge-m3"),
@@ -34,9 +40,46 @@ const AppConfigSchema = z.object({
   wikipediaProvider: z.string().default("online"),
   kiwixUrl: z.string().default(""),
   wikipediaLangs: z.string().default("en,cs"),
+  // Web search grounding: "duckduckgo" works with zero setup; "searxng"
+  // keeps the whole pipeline self-hosted (set searxngUrl); "brave" needs an
+  // API key; "disabled" turns the Web toggle into a no-op.
+  webSearchProvider: z.string().default("duckduckgo"),
+  searxngUrl: z.string().default(""),
+  braveApiKey: z.string().default(""),
+  // Home Assistant REST API — a long-lived access token from HA's own
+  // profile page (Settings → your profile → Long-Lived Access Tokens).
+  // Blank url or token = the home_assistant_* tools just don't appear in
+  // any tool-calling turn, same degrade-quietly pattern as every other
+  // optional integration here.
+  homeAssistantUrl: z.string().default(""),
+  homeAssistantToken: z.string().default(""),
+  // Where nightly DB backups land. Blank = data/backups next to the DB
+  // itself. Point this at a mounted network share (e.g. SSHFS to the
+  // Lenovo) to get them off-device without building a bespoke transfer
+  // client here.
+  dbBackupDir: z.string().default(""),
 });
 
 export type AppConfig = z.infer<typeof AppConfigSchema>;
+
+// Fields that must never round-trip back through a GET — anyone who can
+// load the Settings page (or just hit the API — auth is opt-in and off by
+// default) could otherwise read live API keys/tokens back out in plaintext.
+export const SECRET_KEYS = ["braveApiKey", "homeAssistantToken"] as const satisfies readonly (keyof AppConfig)[];
+
+/** GET-safe copy: secret fields blanked. Pair with secretsPresence() so the
+ *  UI can still show "already set" without ever seeing the value itself. */
+export function maskSecrets(config: AppConfig): AppConfig {
+  const masked = { ...config };
+  for (const key of SECRET_KEYS) masked[key] = "";
+  return masked;
+}
+
+export function secretsPresence(config: AppConfig): Record<(typeof SECRET_KEYS)[number], boolean> {
+  const presence = {} as Record<(typeof SECRET_KEYS)[number], boolean>;
+  for (const key of SECRET_KEYS) presence[key] = config[key].length > 0;
+  return presence;
+}
 
 const ENV_DEFAULTS: Record<keyof AppConfig, string | undefined> = {
   vaultPath: process.env.VAULT_PATH,
@@ -45,6 +88,8 @@ const ENV_DEFAULTS: Record<keyof AppConfig, string | undefined> = {
   llamaCppBinPath: process.env.LLAMACPP_BIN_PATH,
   llamaCppEnv: process.env.LLAMACPP_ENV,
   ollamaHost: process.env.OLLAMA_HOST,
+  litertlmBaseUrl: process.env.LITERTLM_BASE_URL,
+  litertlmModelId: process.env.LITERTLM_MODEL_ID,
   embeddingModel: process.env.EMBEDDING_MODEL,
   embeddingHost: process.env.EMBEDDING_HOST,
   qdrantUrl: process.env.QDRANT_URL,
@@ -52,6 +97,12 @@ const ENV_DEFAULTS: Record<keyof AppConfig, string | undefined> = {
   wikipediaProvider: process.env.WIKIPEDIA_PROVIDER,
   kiwixUrl: process.env.KIWIX_URL,
   wikipediaLangs: process.env.WIKIPEDIA_LANGS,
+  webSearchProvider: process.env.WEB_SEARCH_PROVIDER,
+  searxngUrl: process.env.SEARXNG_URL,
+  braveApiKey: process.env.BRAVE_API_KEY,
+  homeAssistantUrl: process.env.HOME_ASSISTANT_URL,
+  homeAssistantToken: process.env.HOME_ASSISTANT_TOKEN,
+  dbBackupDir: process.env.DB_BACKUP_DIR,
 };
 
 function getRaw(key: string): string | undefined {
@@ -93,9 +144,17 @@ export function loadSettings(forceReload = false): AppConfig {
   return cachedConfig;
 }
 
+const SECRET_KEY_SET: ReadonlySet<string> = new Set(SECRET_KEYS);
+
 export function updateSettings(patch: Partial<AppConfig>): AppConfig {
   for (const [key, value] of Object.entries(patch)) {
-    if (value !== undefined) setSetting(key, String(value));
+    if (value === undefined) continue;
+    // GET never returns a real secret value (see maskSecrets), so an
+    // untouched secret field round-trips back as "" — treat that as "leave
+    // it alone" rather than clearing whatever's actually stored. Only a
+    // genuinely new (non-empty) value overwrites a secret.
+    if (SECRET_KEY_SET.has(key) && value === "") continue;
+    setSetting(key, String(value));
   }
   return loadSettings(true);
 }

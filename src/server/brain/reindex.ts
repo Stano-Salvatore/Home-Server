@@ -3,6 +3,7 @@ import { db } from "@/server/db/client";
 import { brainDocuments, brainChunks } from "@/server/db/schema";
 import { embedTexts } from "./embeddings";
 import { addToIndex, floatsToBuffer, conversationIdOf, resetVectorIndex } from "./vectorStore";
+import { ftsInsertChunks, ftsDeleteAll } from "./lexical";
 
 /**
  * Re-embeds every existing chunk with the currently configured embedding
@@ -12,6 +13,9 @@ import { addToIndex, floatsToBuffer, conversationIdOf, resetVectorIndex } from "
  */
 export async function reindexAllDocuments(): Promise<{ documents: number; chunks: number }> {
   await resetVectorIndex();
+  // Rebuild the FTS shadow table alongside the vectors — this is also how
+  // content ingested before the FTS table existed gets backfilled.
+  ftsDeleteAll();
 
   const docs = db.select().from(brainDocuments).all();
   let chunkCount = 0;
@@ -19,6 +23,8 @@ export async function reindexAllDocuments(): Promise<{ documents: number; chunks
   for (const doc of docs) {
     const chunkRows = db.select().from(brainChunks).where(eq(brainChunks.documentId, doc.id)).all();
     if (chunkRows.length === 0) continue;
+
+    ftsInsertChunks(chunkRows.map((c) => ({ id: c.id, documentId: doc.id, content: c.content })));
 
     const embeddings = await embedTexts(chunkRows.map((c) => c.content));
 

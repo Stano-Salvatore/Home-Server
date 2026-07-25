@@ -2,6 +2,13 @@
 
 import { useCallback, useRef, useState } from "react";
 import { friendlyError } from "@/lib/friendlyError";
+import { readSSE } from "@/lib/sse";
+
+// Fired after any stream completes (send or regenerate) so sibling
+// components — namely the sidebar conversation list, which lives outside
+// this hook's tree — can refresh title/recency without needing a pathname
+// change. Same cross-component-signal pattern as useSidebarCollapsed.ts.
+export const CONVERSATIONS_CHANGED_EVENT = "nedory-conversations-changed";
 
 export type ChatUIMessage = {
   id: string;
@@ -10,6 +17,11 @@ export type ChatUIMessage = {
   citations?: { documentId: string; title: string; sourcePath: string; snippet: string }[];
   durationMs?: number;
   tokenCount?: number;
+  // Transient retrieval/generation phase hint ("searching your notes…") shown
+  // while the reply is still empty; cleared as soon as real text streams in.
+  // Never persisted — history loads leave it unset.
+  status?: string;
+  createdAt?: number; // epoch ms, for the card header timestamp
 };
 
 export function useChatStream(conversationId: string | null) {
@@ -32,6 +44,7 @@ export function useChatStream(conversationId: string | null) {
             citationsJson: string | null;
             durationMs: number | null;
             tokenCount: number | null;
+            createdAt: number | null;
           }) => ({
             id: m.id,
             role: m.role as "user" | "assistant",
@@ -39,6 +52,8 @@ export function useChatStream(conversationId: string | null) {
             citations: m.citationsJson ? JSON.parse(m.citationsJson) : undefined,
             durationMs: m.durationMs ?? undefined,
             tokenCount: m.tokenCount ?? undefined,
+            // DB stores unix seconds (drizzle unixepoch default)
+            createdAt: m.createdAt ? m.createdAt * 1000 : undefined,
           }),
         ),
     );
@@ -57,50 +72,47 @@ export function useChatStream(conversationId: string | null) {
         body: body ? JSON.stringify(body) : undefined,
         signal: controller.signal,
       });
-      if (!res.body) throw new Error("No response stream");
-
-      const reader = res.body.getReader();
-      const decoder = new TextDecoder();
-      let buffer = "";
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        buffer += decoder.decode(value, { stream: true });
-        const events = buffer.split("\n\n");
-        buffer = events.pop() ?? "";
-        for (const evt of events) {
-          const line = evt.replace(/^data:\s*/, "").trim();
-          if (!line) continue;
-          const data = JSON.parse(line);
-          if (data.error) {
-            setError(friendlyError(data.error));
-          } else if (data.delta) {
-            setMessages((prev) => {
-              const next = [...prev];
-              next[next.length - 1] = {
-                ...next[next.length - 1],
-                content: next[next.length - 1].content + data.delta,
-              };
-              return next;
-            });
-          } else if (data.citations) {
-            setMessages((prev) => {
-              const next = [...prev];
-              next[next.length - 1] = { ...next[next.length - 1], citations: data.citations };
-              return next;
-            });
-          } else if (data.stats) {
-            setMessages((prev) => {
-              const next = [...prev];
-              next[next.length - 1] = {
-                ...next[next.length - 1],
-                durationMs: data.stats.durationMs,
-                tokenCount: data.stats.tokenCount,
-              };
-              return next;
-            });
-          }
+      for await (const data of readSSE(res) as AsyncGenerator<{
+        error?: string;
+        delta?: string;
+        status?: string;
+        citations?: ChatUIMessage["citations"];
+        stats?: { durationMs: number; tokenCount: number };
+      }>) {
+        if (data.error) {
+          setError(friendlyError(data.error));
+        } else if (data.delta) {
+          setMessages((prev) => {
+            const next = [...prev];
+            next[next.length - 1] = {
+              ...next[next.length - 1],
+              content: next[next.length - 1].content + data.delta,
+              status: undefined,
+            };
+            return next;
+          });
+        } else if (data.status) {
+          setMessages((prev) => {
+            const next = [...prev];
+            next[next.length - 1] = { ...next[next.length - 1], status: data.status };
+            return next;
+          });
+        } else if (data.citations) {
+          setMessages((prev) => {
+            const next = [...prev];
+            next[next.length - 1] = { ...next[next.length - 1], citations: data.citations };
+            return next;
+          });
+        } else if (data.stats) {
+          setMessages((prev) => {
+            const next = [...prev];
+            next[next.length - 1] = {
+              ...next[next.length - 1],
+              durationMs: data.stats!.durationMs,
+              tokenCount: data.stats!.tokenCount,
+            };
+            return next;
+          });
         }
       }
     } catch (err) {
@@ -110,6 +122,7 @@ export function useChatStream(conversationId: string | null) {
     } finally {
       setStreaming(false);
       abortRef.current = null;
+      window.dispatchEvent(new Event(CONVERSATIONS_CHANGED_EVENT));
     }
   }, []);
 
@@ -119,8 +132,8 @@ export function useChatStream(conversationId: string | null) {
       setError(null);
       setMessages((prev) => [
         ...prev,
-        { id: `local-user-${Date.now()}`, role: "user", content },
-        { id: `local-assistant-${Date.now()}`, role: "assistant", content: "" },
+        { id: `local-user-${Date.now()}`, role: "user", content, createdAt: Date.now() },
+        { id: `local-assistant-${Date.now()}`, role: "assistant", content: "", createdAt: Date.now() },
       ]);
       await runStream(`/api/chat/conversations/${conversationId}/messages`, { content });
     },
@@ -135,7 +148,7 @@ export function useChatStream(conversationId: string | null) {
     setMessages((prev) => {
       const next = [...prev];
       if (next.length && next[next.length - 1].role === "assistant") next.pop();
-      next.push({ id: `local-assistant-${Date.now()}`, role: "assistant", content: "" });
+      next.push({ id: `local-assistant-${Date.now()}`, role: "assistant", content: "", createdAt: Date.now() });
       return next;
     });
     await runStream(`/api/chat/conversations/${conversationId}/regenerate`);
