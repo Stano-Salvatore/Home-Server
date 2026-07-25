@@ -1,5 +1,6 @@
 import { spawn, execFile } from "node:child_process";
 import net from "node:net";
+import os from "node:os";
 import { eq } from "drizzle-orm";
 import { db } from "@/server/db/client";
 import { llamacppServers } from "@/server/db/schema";
@@ -58,6 +59,17 @@ export async function listServers(): Promise<LlamaCppServerRow[]> {
 // needed on Android/Termux where the default Vulkan loader silently ignores
 // a GPU-accelerated build and falls back to a driver that crashes on LLM
 // shaders (see bin/install-vulkan-llama).
+// Resolve a leading "~" to the home dir. The binary and model paths are quoted
+// when we build the tmux/exec command, and passed verbatim to spawn() — in
+// neither case does the shell expand "~", so a Settings value like
+// "~/llama.cpp/.../llama-server" (which the UI placeholders use) would resolve
+// to a literal "~" path and fail to launch. Expand it ourselves.
+function expandHome(p: string): string {
+  if (p === "~") return os.homedir();
+  if (p.startsWith("~/")) return os.homedir() + p.slice(1);
+  return p;
+}
+
 function parseEnvOverrides(raw: string): Record<string, string> {
   const out: Record<string, string> = {};
   for (const tok of raw.split(/\s+/).filter(Boolean)) {
@@ -77,8 +89,9 @@ export async function startServer(opts: {
   const settings = loadSettings();
   const port = await allocatePort();
   const id = newId("llamacpp");
+  const binPath = expandHome(settings.llamaCppBinPath);
   const extraArgsList = opts.extraArgs ? opts.extraArgs.split(/\s+/).filter(Boolean) : [];
-  const args = ["-m", opts.modelPath, "--port", String(port), "--host", "127.0.0.1", ...extraArgsList];
+  const args = ["-m", expandHome(opts.modelPath), "--port", String(port), "--host", "127.0.0.1", ...extraArgsList];
   const envOverrides = settings.llamaCppEnv ? parseEnvOverrides(settings.llamaCppEnv) : {};
 
   let pid: number | undefined;
@@ -89,7 +102,7 @@ export async function startServer(opts: {
     const envPrefix = Object.entries(envOverrides)
       .map(([k, v]) => `${k}='${v.replace(/'/g, "'\\''")}'`)
       .join(" ");
-    const cmd = [settings.llamaCppBinPath, ...args].map((a) => `'${a.replace(/'/g, "'\\''")}'`).join(" ");
+    const cmd = [binPath, ...args].map((a) => `'${a.replace(/'/g, "'\\''")}'`).join(" ");
     await new Promise<void>((resolve, reject) => {
       execFile(
         "tmux",
@@ -101,7 +114,7 @@ export async function startServer(opts: {
       );
     });
   } else {
-    const child = spawn(settings.llamaCppBinPath, args, {
+    const child = spawn(binPath, args, {
       detached: true,
       stdio: "ignore",
       env: { ...process.env, ...envOverrides },
