@@ -15,6 +15,13 @@ export function litertlmBaseUrl(): string {
 export function litertlmModelId(): string {
   return loadSettings().litertlmModelId;
 }
+export function litertlmPort(): number | undefined {
+  try {
+    return Number(new URL(litertlmBaseUrl()).port) || undefined;
+  } catch {
+    return undefined;
+  }
+}
 
 // One-shot, non-streaming litert-lm call for the small structured-output use
 // cases (brain/planner.ts, tools/planner.ts, chat/autotitle.ts) — every one
