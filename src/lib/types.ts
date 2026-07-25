@@ -36,6 +36,7 @@ export type ScoredModel = {
   score: number;
   label: FitLabel;
   estTokPerSec: number;
+  kvCacheGB: number;
 };
 
 export type ModelOption = {

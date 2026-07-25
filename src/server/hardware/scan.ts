@@ -1,4 +1,5 @@
 import { spawn } from "node:child_process";
+import os from "node:os";
 import si from "systeminformation";
 import { getSetting, setSetting } from "@/server/settings/config";
 
@@ -59,8 +60,14 @@ async function scanHardware(): Promise<HardwareInfo> {
     }
   }
 
+  // systeminformation can't parse Android/Termux's /proc/cpuinfo on some ARM
+  // SoCs (e.g. Qualcomm Oryon / Snapdragon X), returning 0 for both core counts.
+  // Fall back to Node's own view — os.availableParallelism() respects CPU
+  // affinity, os.cpus().length is the raw logical count — so we never report 0.
+  const osCores = os.availableParallelism?.() || os.cpus().length || 1;
+
   return {
-    cpuCores: cpu.physicalCores || cpu.cores,
+    cpuCores: cpu.physicalCores || cpu.cores || osCores,
     cpuModel: cpu.brand || `${cpu.manufacturer} CPU`,
     totalRamGB: bytesToGB(mem.total),
     availableRamGB: bytesToGB(mem.available),
