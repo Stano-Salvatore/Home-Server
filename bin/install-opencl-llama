@@ -49,18 +49,22 @@ pkg install -y git cmake ninja clang opencl-headers ocl-icd clinfo
 echo "◢ [3/6] Registering the Adreno driver with an OpenCL ICD file…"
 mkdir -p "$ICD_DIR"
 echo "$ADRENO_DRIVER" > "$ICD_DIR/adreno.icd"
-# The vendor driver pulls in libcutils.so / libvndksupport.so, also in
-# /vendor/lib64 — expose them at runtime, and persist it for future shells.
-export LD_LIBRARY_PATH="/vendor/lib64:${LD_LIBRARY_PATH:-}"
-BASHRC_LINE='export LD_LIBRARY_PATH=/vendor/lib64:$LD_LIBRARY_PATH'
-grep -qF "$BASHRC_LINE" "$HOME/.bashrc" 2>/dev/null || echo "$BASHRC_LINE" >> "$HOME/.bashrc"
+# IMPORTANT: LD_LIBRARY_PATH=/vendor/lib64 must be scoped to the OpenCL runtime
+# ONLY (clinfo below, and llama-server at the end). Do NOT export it into the
+# build environment or persist it to .bashrc: /vendor/lib64 holds Android's
+# system libraries (its own libc++ etc.), and putting it on the global library
+# path makes every Termux binary — cmake first — load those incompatible libs
+# and fail to resolve symbols ("cannot locate symbol …__ndk1…"). The vendor
+# driver's deps (libcutils.so, libvndksupport.so) live there and are only needed
+# when the driver is actually loaded, i.e. at OpenCL runtime.
 
 echo "◢ [4/6] Verifying OpenCL sees the Adreno GPU (clinfo)…"
-if clinfo 2>/dev/null | grep -qi "adreno\|qualcomm"; then
+if LD_LIBRARY_PATH="/vendor/lib64:${LD_LIBRARY_PATH:-}" clinfo 2>/dev/null | grep -qi "adreno\|qualcomm"; then
   echo "  ✓ OpenCL reports an Adreno device"
 else
   echo "⚠ clinfo didn't clearly report an Adreno/Qualcomm device — the build will"
-  echo "  proceed, but GPU offload may not engage. Send: clinfo 2>&1 | head -40"
+  echo "  proceed, but GPU offload may not engage. Send:"
+  echo "    LD_LIBRARY_PATH=/vendor/lib64 clinfo 2>&1 | head -40"
 fi
 
 echo "◢ [5/6] Building llama.cpp with the OpenCL Adreno backend (slow on a phone)…"
