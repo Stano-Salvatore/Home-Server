@@ -17,9 +17,12 @@
 #
 # There are NO prebuilt Linux/Android binaries in the LiteRT-LM releases (only a
 # macOS arm64 one), so on Termux/Linux the runtime installs from PyPI (the
-# `litert-lm` package, Python 3.10+). We keep it in its own venv to dodge PEP 668
-# "externally-managed-environment" errors and symlink the CLI onto PATH, the
-# same way bin/nedory exposes its helpers.
+# `litert-lm` package, Python 3.10+). We install it into the user site and
+# symlink the CLI onto PATH, the same way bin/nedory exposes its helpers.
+# (An earlier version used a venv, but `python -m venv` is flaky on Termux —
+# it left a venv with no bin/python — so we install directly instead, retrying
+# with --break-system-packages if a distro marks its Python PEP 668
+# externally-managed.)
 #
 # Confidence: the pip path is Google's documented install, and the Python API
 # lists Android aarch64 + x86_64 support — but a matching wheel for *Termux*
@@ -32,10 +35,14 @@ set -e
 # LITERT_LM_VERSION=… to bump. Bumping this is the whole "upgrade".
 LITERT_LM_VERSION="${1:-${LITERT_LM_VERSION:-0.14.0}}"
 
-LRT_HOME="${LITERT_LM_HOME:-$HOME/.litert-lm}"
 BIN_DIR="${PREFIX:-$HOME/.local}/bin"
 
-echo "◢ [1/4] Ensuring Python 3.10+ is available…"
+# Termux installs into $PREFIX and puts entry points on PATH already; regular
+# distros need --user so pip doesn't try to write to a root-owned site.
+IS_TERMUX=0
+[ -n "$PREFIX" ] && command -v pkg >/dev/null 2>&1 && IS_TERMUX=1
+
+echo "◢ [1/3] Ensuring Python 3.10+ is available…"
 if [ -n "$PREFIX" ] && command -v pkg >/dev/null 2>&1; then
   # Termux: `python` is python3 here.
   command -v python3 >/dev/null 2>&1 || pkg install -y python
@@ -52,34 +59,51 @@ python3 -c 'import sys; sys.exit(0 if sys.version_info[:2] >= (3, 10) else 1)' |
   exit 1
 }
 
-echo "◢ [2/4] Creating an isolated venv at $LRT_HOME…"
-if [ ! -d "$LRT_HOME" ]; then
-  python3 -m venv "$LRT_HOME" || {
-    echo "✗ venv creation failed — on Debian/Ubuntu you may need: sudo apt install -y python3-venv"
+pip_install() {  # extra args ($@) are appended, e.g. --break-system-packages
+  if [ "$IS_TERMUX" = 1 ]; then
+    python3 -m pip install --upgrade "$@" "litert-lm==$LITERT_LM_VERSION"
+  else
+    python3 -m pip install --user --upgrade "$@" "litert-lm==$LITERT_LM_VERSION"
+  fi
+}
+
+echo "◢ [2/3] Installing litert-lm==$LITERT_LM_VERSION from PyPI…"
+PIP_ERR="$(mktemp)"
+trap 'rm -f "$PIP_ERR"' EXIT
+if ! pip_install 2>"$PIP_ERR"; then
+  cat "$PIP_ERR"
+  if grep -qi "externally-managed" "$PIP_ERR"; then
+    echo "  (PEP 668 environment — retrying with --break-system-packages)"
+    pip_install --break-system-packages
+  elif grep -qi "no matching distribution\|could not find a version" "$PIP_ERR"; then
+    echo "✗ No litert-lm wheel for this platform/Python yet. The fallback is a"
+    echo "  Bazel source build (much bigger). Send the error above."
     exit 1
-  }
+  else
+    exit 1
+  fi
 fi
-"$LRT_HOME/bin/python" -m pip install --quiet --upgrade pip
 
-echo "◢ [3/4] Installing litert-lm==$LITERT_LM_VERSION from PyPI…"
-"$LRT_HOME/bin/pip" install --upgrade "litert-lm==$LITERT_LM_VERSION"
-
-# Expose the CLI on PATH (mirrors bin/nedory's symlink-into-BIN_DIR pattern, so
-# it's a bare `litert-lm` command from anywhere, like the other helpers).
-mkdir -p "$BIN_DIR"
-if [ -x "$LRT_HOME/bin/litert-lm" ]; then
-  ln -sf "$LRT_HOME/bin/litert-lm" "$BIN_DIR/litert-lm"
-else
-  echo "✗ Installed, but $LRT_HOME/bin/litert-lm wasn't produced — the package"
-  echo "  may expose a different entrypoint. Check: ls $LRT_HOME/bin"
+echo "◢ [3/3] Verifying…"
+# Locate the installed entry point: on PATH already (Termux $PREFIX/bin), or the
+# --user script dir (~/.local/bin) which may not be on PATH yet.
+LRT_BIN="$(command -v litert-lm 2>/dev/null || true)"
+if [ -z "$LRT_BIN" ]; then
+  for cand in "$HOME/.local/bin/litert-lm" "$PREFIX/bin/litert-lm"; do
+    [ -x "$cand" ] && LRT_BIN="$cand" && break
+  done
+fi
+if [ -z "$LRT_BIN" ]; then
+  echo "✗ Installed, but couldn't find the litert-lm entry point. Check:"
+  echo "  python3 -m pip show -f litert-lm | grep -i 'location\|litert-lm'"
   exit 1
 fi
-
-echo "◢ [4/4] Verifying…"
-if ! "$BIN_DIR/litert-lm" --version 2>/dev/null; then
-  "$BIN_DIR/litert-lm" --help >/dev/null 2>&1 \
-    || echo "⚠ litert-lm installed but --version/--help didn't run cleanly — check above."
-fi
+# Expose it as a bare command from anywhere (mirrors bin/nedory's symlinks),
+# which also covers the case where ~/.local/bin isn't on PATH.
+mkdir -p "$BIN_DIR"
+[ "$LRT_BIN" = "$BIN_DIR/litert-lm" ] || ln -sf "$LRT_BIN" "$BIN_DIR/litert-lm"
+"$LRT_BIN" --version 2>/dev/null \
+  || echo "⚠ litert-lm installed but --version didn't run cleanly — check above."
 echo "  litert-lm on PATH at: $BIN_DIR/litert-lm"
 
 cat <<EOF
