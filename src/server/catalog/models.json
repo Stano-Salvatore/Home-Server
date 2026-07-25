@@ -84,28 +84,28 @@
     "ollamaTag": "qwen2.5:32b"
   },
   {
-    "id": "gemma2-9b-q4",
-    "family": "Gemma2",
-    "paramsB": 9,
+    "id": "gemma3-12b-q4",
+    "family": "Gemma 3",
+    "paramsB": 12,
     "quant": "Q4_K_M",
-    "fileSizeGB": 5.5,
-    "minRamGB": 10,
-    "minVramGB": 7,
-    "recommendedVramGB": 9,
-    "contextLength": 8192,
-    "ollamaTag": "gemma2:9b"
+    "fileSizeGB": 8.1,
+    "minRamGB": 14,
+    "minVramGB": 9,
+    "recommendedVramGB": 11,
+    "contextLength": 128000,
+    "ollamaTag": "gemma3:12b"
   },
   {
-    "id": "gemma2-27b-q4",
-    "family": "Gemma2",
+    "id": "gemma3-27b-q4",
+    "family": "Gemma 3",
     "paramsB": 27,
     "quant": "Q4_K_M",
-    "fileSizeGB": 16,
-    "minRamGB": 28,
-    "minVramGB": 19,
-    "recommendedVramGB": 22,
-    "contextLength": 8192,
-    "ollamaTag": "gemma2:27b"
+    "fileSizeGB": 17,
+    "minRamGB": 30,
+    "minVramGB": 20,
+    "recommendedVramGB": 24,
+    "contextLength": 128000,
+    "ollamaTag": "gemma3:27b"
   },
   {
     "id": "phi3.5-mini-q4",
