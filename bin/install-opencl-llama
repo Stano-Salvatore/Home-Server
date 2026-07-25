@@ -1,0 +1,106 @@
+#!/usr/bin/env bash
+# Build a GPU-accelerated llama.cpp on the S25 (Snapdragon 8 Elite / Adreno 830)
+# via llama.cpp's OpenCL backend, so Nedory can run models on the phone's Adreno
+# GPU — fast *and* on a bigger/more accurate model than CPU allows. Run this ON
+# the S25 in Termux.
+#
+# Why THIS, not install-vulkan-llama: that one targets the S21's Adreno 660 via
+# Vulkan+Turnip. The S25's Adreno 830 has a working OpenCL driver reachable from
+# Termux (confirmed here: `litert-lm run --backend gpu` loaded OpenCL), and
+# Qualcomm contributed an OpenCL backend to llama.cpp tuned for Adreno —
+# documented at ~24x prefill / ~2.7x token-gen vs CPU on this exact chip
+# (ggml-org/llama.cpp discussion #23736).
+#
+# Why we need it at all: LiteRT-LM's `serve` is CPU-only (XNNPACK; issue #1929),
+# so litert can't give Nedory GPU speed. llama.cpp+OpenCL can, and Nedory already
+# supports llama.cpp as a backend — no wrapper needed. Keep litert-lm serve too;
+# it stays the always-available CPU fallback for the planner/autotitle helpers.
+#
+# The core Android gotcha: the Adreno OpenCL driver lives at
+# /vendor/lib64/libOpenCL_adreno.so, invisible to Termux's linker. We register it
+# with an ICD file and expose its deps via LD_LIBRARY_PATH=/vendor/lib64.
+#
+# Confidence: a real, documented path for the Adreno 830 — but newer and fiddlier
+# than the Vulkan one, and Termux package names / driver paths drift. Treat the
+# first run as an experiment; if a step fails, send the exact error. Reference
+# implementation: github.com/paragon83114/llama-adreno (this follows the same
+# approach, Nedory-flavored).
+set -e
+
+LLAMA_DIR="${LLAMA_DIR:-$HOME/llama.cpp}"
+ADRENO_DRIVER="/vendor/lib64/libOpenCL_adreno.so"
+ICD_DIR="$PREFIX/etc/OpenCL/vendors"
+
+echo "◢ [1/6] Checking the Adreno OpenCL driver is present…"
+if [ ! -e "$ADRENO_DRIVER" ]; then
+  echo "✗ $ADRENO_DRIVER not found — this build needs the vendor OpenCL driver at"
+  echo "  that path (Snapdragon 8-class Adreno). Check and send what you find:"
+  echo "    ls -l /vendor/lib64/libOpenCL*"
+  exit 1
+fi
+echo "  found $ADRENO_DRIVER"
+
+echo "◢ [2/6] Installing Termux build tools + OpenCL headers/loader…"
+pkg update -y
+# ocl-icd is the ICD loader llama.cpp links against; it dispatches to the vendor
+# driver named in the .icd file written below. clinfo is our GPU-visibility check.
+pkg install -y git cmake ninja clang opencl-headers ocl-icd clinfo
+
+echo "◢ [3/6] Registering the Adreno driver with an OpenCL ICD file…"
+mkdir -p "$ICD_DIR"
+echo "$ADRENO_DRIVER" > "$ICD_DIR/adreno.icd"
+# The vendor driver pulls in libcutils.so / libvndksupport.so, also in
+# /vendor/lib64 — expose them at runtime, and persist it for future shells.
+export LD_LIBRARY_PATH="/vendor/lib64:${LD_LIBRARY_PATH:-}"
+BASHRC_LINE='export LD_LIBRARY_PATH=/vendor/lib64:$LD_LIBRARY_PATH'
+grep -qF "$BASHRC_LINE" "$HOME/.bashrc" 2>/dev/null || echo "$BASHRC_LINE" >> "$HOME/.bashrc"
+
+echo "◢ [4/6] Verifying OpenCL sees the Adreno GPU (clinfo)…"
+if clinfo 2>/dev/null | grep -qi "adreno\|qualcomm"; then
+  echo "  ✓ OpenCL reports an Adreno device"
+else
+  echo "⚠ clinfo didn't clearly report an Adreno/Qualcomm device — the build will"
+  echo "  proceed, but GPU offload may not engage. Send: clinfo 2>&1 | head -40"
+fi
+
+echo "◢ [5/6] Building llama.cpp with the OpenCL Adreno backend (slow on a phone)…"
+if [ ! -d "$LLAMA_DIR" ]; then
+  git clone https://github.com/ggml-org/llama.cpp "$LLAMA_DIR"
+fi
+cd "$LLAMA_DIR"
+git pull
+cmake -B build-opencl -G Ninja \
+  -DCMAKE_BUILD_TYPE=Release \
+  -DGGML_OPENCL=ON \
+  -DGGML_OPENCL_USE_ADRENO_KERNELS=ON \
+  -DLLAMA_CURL=OFF
+cmake --build build-opencl --config Release -j"$(nproc)"
+
+BIN="$LLAMA_DIR/build-opencl/bin/llama-server"
+[ -x "$BIN" ] || { echo "✗ Build finished but $BIN is missing — check the log above."; exit 1; }
+
+echo "◢ [6/6] Done. GPU llama-server at: $BIN"
+cat <<EOF
+
+✓ GPU llama.cpp built for the Adreno 830.
+
+For accuracy, grab Gemma 4 E4B QAT in Q4_0 (Q4_0 is the Adreno-optimized quant):
+  mkdir -p ~/models && cd ~/models
+  # from google/gemma-4-E4B-it-qat-q4_0-gguf on Hugging Face (Files tab)
+  wget <the .gguf URL>
+
+Start the GPU server — the Adreno flags matter (esp. f16 KV; q8_0 crashes on OpenCL):
+  LD_LIBRARY_PATH=/vendor/lib64 $BIN \\
+    -m ~/models/<gemma-4-E4B-it-qat-q4_0>.gguf \\
+    -ngl 99 \\
+    --cache-type-k f16 --cache-type-v f16 \\
+    -c 16384 -b 2048 -ub 512 -t 4 \\
+    --port 8081
+
+Then in Nedory:
+  - Settings → llama.cpp binary path → $BIN
+  - Settings → llama.cpp env → LD_LIBRARY_PATH=/vendor/lib64
+  - Cookbook → start a llama.cpp server; model path = your E4B .gguf; extra args:
+      -ngl 99 --cache-type-k f16 --cache-type-v f16 -c 16384 -b 2048 -ub 512 -t 4
+  - It shows up as a running model in Chat/Agents — GPU-accelerated, E4B accuracy.
+EOF
