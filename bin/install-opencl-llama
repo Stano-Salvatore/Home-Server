@@ -72,13 +72,33 @@ if [ ! -d "$LLAMA_DIR" ]; then
   git clone https://github.com/ggml-org/llama.cpp "$LLAMA_DIR"
 fi
 cd "$LLAMA_DIR"
+# Drop our local patch (below) before pulling so the pull stays clean.
+git checkout -- vendor/sheredom/subprocess.h 2>/dev/null || true
 git pull
+
+# Termux/Bionic doesn't declare posix_spawn_file_actions_addchdir_np, which the
+# multimodal helper (tools/mtmd) pulls in via vendor/sheredom/subprocess.h — so
+# mtmd-helper.cpp fails to compile (llama.cpp#18615/#19388). The server links
+# libmtmd, so we can't just skip it; instead inject a no-op stub (the
+# cwd-changing subprocess path isn't exercised by model serving). Idempotent:
+# strip any prior stub, then insert exactly one after the first spawn.h include.
+SP="$LLAMA_DIR/vendor/sheredom/subprocess.h"
+STUB='static inline int posix_spawn_file_actions_addchdir_np(posix_spawn_file_actions_t *fa, const char *p){(void)fa;(void)p;return 38;}'
+sed -i '/static inline int posix_spawn_file_actions_addchdir_np/d' "$SP"
+sed -i "0,/#include <spawn.h>/s##&\n$STUB#" "$SP"
+
+# Skip tests/examples (not needed, and cuts build time a lot). No __ANDROID_API__
+# override needed — the stub above is the real fix for the one file that failed.
 cmake -B build-opencl -G Ninja \
   -DCMAKE_BUILD_TYPE=Release \
   -DGGML_OPENCL=ON \
   -DGGML_OPENCL_USE_ADRENO_KERNELS=ON \
-  -DLLAMA_CURL=OFF
-cmake --build build-opencl --config Release -j"$(nproc)"
+  -DLLAMA_CURL=OFF \
+  -DLLAMA_BUILD_TESTS=OFF \
+  -DLLAMA_BUILD_EXAMPLES=OFF
+# JOBS defaults low: the big multimodal TUs (clip.cpp, mtmd.cpp) are memory-hungry
+# and -j$(nproc) OOM-kills a compiler on a phone. Raise with JOBS=N on a big box.
+cmake --build build-opencl --config Release -j"${JOBS:-2}"
 
 BIN="$LLAMA_DIR/build-opencl/bin/llama-server"
 [ -x "$BIN" ] || { echo "✗ Build finished but $BIN is missing — check the log above."; exit 1; }
