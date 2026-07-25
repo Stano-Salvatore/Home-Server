@@ -50,7 +50,12 @@ export function ModelPicker({
     // chat landing's last-used model from localStorage) wins the race — this
     // only fills genuinely empty pickers.
     const t = setTimeout(() => {
-      const opt = options.find((o) => o.backend === "litertlm") ?? options[0];
+      // Prefer LiteRT-LM only when it's actually running — it's always present
+      // in the list now (see registry.ts), but auto-selecting it while `serve`
+      // is down would make a fresh chat fail on its first message. Fall back to
+      // the first working option in that case.
+      const opt =
+        options.find((o) => o.backend === "litertlm" && !o.idle) ?? options[0];
       onChangeRef.current({ backend: opt.backend, modelId: opt.id, label: opt.label });
     }, 0);
     return () => clearTimeout(t);

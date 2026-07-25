@@ -1,6 +1,6 @@
 import { listLoadedSizes, listInstalledTags, isOllamaReachable, ollamaBackend } from "./ollama";
 import { llamaCppBackend } from "./llamacpp";
-import { litertLmBackend } from "./litertlm";
+import { litertLmBackend, litertlmModelId, litertlmPort } from "./litertlm";
 import { listNodes, makeOllamaTarget } from "@/server/nodes/nodes";
 import type { ModelBackend, RunningModel, BackendKind } from "./types";
 
@@ -65,7 +65,25 @@ export async function listAllModelOptions(): Promise<ModelOption[]> {
     }
   }
 
-  return [...ollamaOptions, ...llamacppRunning, ...litertlmRunning];
+  // LiteRT-LM is Nedory's always-available on-device backend, but `serve`
+  // reports models only while it's running — so when it's down (or not started
+  // yet) listRunning() returns nothing and it would vanish from the picker.
+  // Keep the configured model selectable regardless, marked idle so it doesn't
+  // show up under "Running now"; selecting it will start/expect serve on demand.
+  const litertlmOptions: ModelOption[] =
+    litertlmRunning.length > 0
+      ? litertlmRunning
+      : [
+          {
+            id: litertlmModelId(),
+            backend: "litertlm",
+            label: litertlmModelId(),
+            port: litertlmPort(),
+            idle: true,
+          },
+        ];
+
+  return [...ollamaOptions, ...llamacppRunning, ...litertlmOptions];
 }
 
 export function backendFor(kind: BackendKind): ModelBackend {
