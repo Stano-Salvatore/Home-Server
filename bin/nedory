@@ -110,6 +110,19 @@ if command -v ollama >/dev/null 2>&1 && ! pgrep -f "ollama serve" >/dev/null 2>&
   echo "◢ Local Ollama serving on :11434"
 fi
 
+# 2b) Local litert-lm serve — the always-available on-device chat model, so
+# `nedory` is the single command that brings the whole thing up (no more
+# "remember to start litert-lm too"). Started in tmux like the dashboard so
+# Android doesn't kill it once backgrounded. Port defaults to 9379 to match the
+# app's litertlmBaseUrl setting; override with LITERTLM_PORT in .nedory.env if
+# you've changed it there. Skipped when the CLI isn't installed or it's already
+# running; if no model is imported yet, run `install-litert-lm` once first.
+if command -v litert-lm >/dev/null 2>&1 && command -v tmux >/dev/null 2>&1 \
+    && ! pgrep -f "litert-lm serve" >/dev/null 2>&1; then
+  tmux new-session -d -s litert-lm "litert-lm serve --port ${LITERTLM_PORT:-9379}"
+  echo "◢ litert-lm serving on :${LITERTLM_PORT:-9379} (tmux session 'litert-lm')"
+fi
+
 # 3) The dashboard.
 if [ ! -d .next ]; then
   echo "◢ Nedory: first build, one moment…"
