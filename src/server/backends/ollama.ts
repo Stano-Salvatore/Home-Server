@@ -105,7 +105,11 @@ async function* streamChat(
   const res = await fetch(`${clean(host)}/api/chat`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ model: tag, messages, stream: true }),
+    // think:false — reasoning models (qwen3+) otherwise burn minutes of
+    // thinking tokens that stream as message.thinking, which this backend
+    // (and the chat UI) has no channel for: the user sees "writing a reply…"
+    // and nothing else. Ollama ignores the flag for non-thinking models.
+    body: JSON.stringify({ model: tag, messages, stream: true, think: false }),
     signal,
   });
   if (!res.ok || !res.body) {
