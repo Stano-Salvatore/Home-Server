@@ -76,6 +76,12 @@ export const messages = sqliteTable(
     // assistant replies from before this column existed.
     durationMs: integer("duration_ms"),
     tokenCount: integer("token_count"),
+    // Assistant replies only: where the reply was actually generated
+    // (ChatVia JSON) — written when a fallback route answered instead of the
+    // conversation's configured target, so the downgrade stays visible in
+    // history. Null means the requested target answered (and all replies
+    // from before this column existed).
+    viaJson: text("via_json"),
     createdAt: integer("created_at")
       .notNull()
       .default(sql`(unixepoch())`),

@@ -22,6 +22,14 @@ export type ChatUIMessage = {
   // Never persisted — history loads leave it unset.
   status?: string;
   createdAt?: number; // epoch ms, for the card header timestamp
+  // Where the reply was actually generated, when it differs from the
+  // conversation's configured target (a fallback answered). Persisted.
+  via?: {
+    backend: string;
+    modelId: string;
+    nodeName?: string;
+    fallbackFrom?: { backend: string; modelId: string; nodeName?: string };
+  };
 };
 
 export function useChatStream(conversationId: string | null) {
@@ -42,6 +50,7 @@ export function useChatStream(conversationId: string | null) {
             role: string;
             content: string;
             citationsJson: string | null;
+            viaJson: string | null;
             durationMs: number | null;
             tokenCount: number | null;
             createdAt: number | null;
@@ -50,6 +59,7 @@ export function useChatStream(conversationId: string | null) {
             role: m.role as "user" | "assistant",
             content: m.content,
             citations: m.citationsJson ? JSON.parse(m.citationsJson) : undefined,
+            via: m.viaJson ? JSON.parse(m.viaJson) : undefined,
             durationMs: m.durationMs ?? undefined,
             tokenCount: m.tokenCount ?? undefined,
             // DB stores unix seconds (drizzle unixepoch default)
@@ -78,6 +88,7 @@ export function useChatStream(conversationId: string | null) {
         status?: string;
         citations?: ChatUIMessage["citations"];
         stats?: { durationMs: number; tokenCount: number };
+        via?: ChatUIMessage["via"];
       }>) {
         if (data.error) {
           setError(friendlyError(data.error));
@@ -101,6 +112,12 @@ export function useChatStream(conversationId: string | null) {
           setMessages((prev) => {
             const next = [...prev];
             next[next.length - 1] = { ...next[next.length - 1], citations: data.citations };
+            return next;
+          });
+        } else if (data.via) {
+          setMessages((prev) => {
+            const next = [...prev];
+            next[next.length - 1] = { ...next[next.length - 1], via: data.via };
             return next;
           });
         } else if (data.stats) {

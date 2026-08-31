@@ -57,6 +57,13 @@
       "when": 1784463316843,
       "tag": "0007_flaky_wong",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "6",
+      "when": 1788210474029,
+      "tag": "0008_add_message_via",
+      "breakpoints": true
     }
   ]
 }

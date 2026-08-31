@@ -13,6 +13,14 @@ function formatStats(durationMs: number, tokenCount: number): string {
   return `${tokenCount} tok · ${time} · ${tokPerSec.toFixed(1)} tok/s`;
 }
 
+// "qwen3:14b @ ryzen" — node-qualified label for a chat route, matching the
+// server's describeRoute so the fallback chip and the status line agree.
+function routeLabel(r: { modelId: string; nodeName?: string }): string {
+  const sep = r.modelId.indexOf("::");
+  const tag = sep === -1 ? r.modelId : r.modelId.slice(sep + 2);
+  return r.nodeName ? tag + " @ " + r.nodeName : tag;
+}
+
 function formatTime(epochMs?: number): string | null {
   if (!epochMs) return null;
   const d = new Date(epochMs);
@@ -134,6 +142,14 @@ export function MessageBubble({
             {message.durationMs !== undefined && message.tokenCount !== undefined && (
               <span className="text-[11px] text-ink-dim">
                 {formatStats(message.durationMs, message.tokenCount)}
+              </span>
+            )}
+            {message.via?.fallbackFrom && (
+              <span
+                className="text-[11px] text-ink-dim"
+                title={"Requested " + routeLabel(message.via.fallbackFrom) + ", which was unreachable when this reply was generated."}
+              >
+                ⚠ answered by {routeLabel(message.via)} (fallback)
               </span>
             )}
             <span className="ml-auto flex items-center gap-2">
