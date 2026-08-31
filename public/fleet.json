@@ -1,0 +1,90 @@
+﻿{
+    "note":  "Ports listed are the authoritative service map for this box.",
+    "host":  "ryzen (192.168.100.67 LAN / 100.127.224.55 tailscale)",
+    "services":  {
+                     "ollama":  {
+                                    "up":  true,
+                                    "port":  11434
+                                },
+                     "jellyfin":  {
+                                      "up":  true,
+                                      "port":  8096
+                                  },
+                     "open-webui":  {
+                                        "up":  true,
+                                        "port":  8080
+                                    },
+                     "immich":  {
+                                    "up":  true,
+                                    "port":  2283
+                                },
+                     "dashboard":  {
+                                       "up":  true,
+                                       "port":  3000
+                                   },
+                     "nedory":  {
+                                    "up":  true,
+                                    "port":  3200
+                                },
+                     "navidrome":  {
+                                       "up":  true,
+                                       "port":  4533
+                                   }
+                 },
+    "disks":  [
+                  {
+                      "freeGB":  116.3,
+                      "drive":  "C",
+                      "totalGB":  475.5
+                  },
+                  {
+                      "freeGB":  384.5,
+                      "drive":  "E",
+                      "totalGB":  931.5
+                  },
+                  {
+                      "freeGB":  333.8,
+                      "drive":  "F",
+                      "totalGB":  465.7
+                  }
+              ],
+    "dockerContainers":  [
+                             {
+                                 "name":  "homepage",
+                                 "status":  "Up 2 hours (healthy)"
+                             },
+                             {
+                                 "name":  "open-webui",
+                                 "status":  "Up 8 hours (healthy)"
+                             },
+                             {
+                                 "name":  "navidrome-music",
+                                 "status":  "Up 9 hours"
+                             },
+                             {
+                                 "name":  "navidrome",
+                                 "status":  "Up 4 hours"
+                             },
+                             {
+                                 "name":  "jellyfin",
+                                 "status":  "Up 30 hours (healthy)"
+                             },
+                             {
+                                 "name":  "immich_server",
+                                 "status":  "Up 12 hours (healthy)"
+                             },
+                             {
+                                 "name":  "immich_postgres",
+                                 "status":  "Up 33 hours (healthy)"
+                             },
+                             {
+                                 "name":  "immich_machine_learning",
+                                 "status":  "Up 33 hours (healthy)"
+                             },
+                             {
+                                 "name":  "immich_redis",
+                                 "status":  "Up 33 hours (healthy)"
+                             }
+                         ],
+    "updatedAt":  "2026-09-01 01:40:22"
+}
