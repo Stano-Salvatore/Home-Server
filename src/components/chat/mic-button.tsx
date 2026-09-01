@@ -20,7 +20,7 @@ import { Mic, Ear, Loader2 } from "lucide-react";
 
 const SILENCE_MS = 700;
 const MIN_SEGMENT_MS = 800;
-const SPEECH_RMS = 0.015;
+const SPEECH_RMS = 0.005; // USB desktop mics run quiet — 0.015 missed real speech
 const AUTO_SEND_MS = 5000;
 // whisper's greatest hits for "Nedory", learned empirically
 const WAKE_RE = /\b(nedory|nedori|nedary|netary|netery|nedery)\b[,.!?]?\s*/i;
@@ -37,6 +37,7 @@ export function MicButton({
   const [mode, setMode] = useState<Mode>("off");
   const [pending, setPending] = useState(0);
   const [error, setError] = useState<string | null>(null);
+  const [hearing, setHearing] = useState(false);
 
   const modeRef = useRef<Mode>("off");
   const wakeWantedRef = useRef(false); // return to standby after auto-send?
@@ -157,6 +158,7 @@ export function MicButton({
         const rms = Math.sqrt(sum / buf.length);
         const seg = segRef.current;
         const now = Date.now();
+        setHearing(rms > SPEECH_RMS);
         if (rms > SPEECH_RMS) {
           seg.lastLoud = now;
           seg.sawSpeech = true;
@@ -193,6 +195,7 @@ export function MicButton({
 
   function teardown() {
     setModeBoth("off");
+    setHearing(false);
     if (meterRef.current !== null) {
       clearInterval(meterRef.current);
       meterRef.current = null;
@@ -252,7 +255,7 @@ export function MicButton({
         aria-label={mode === "active" ? "Stop dictation" : "Start dictation"}
         title={error ?? (mode === "active" ? "Listening — pause 5s to send" : "Tap to speak")}
         className={`rounded-lg border p-2 transition-colors ${
-          mode === "active" ? "text-term-red animate-pulse" : "text-ink-dim hover:text-ink"
+          hearing && mode !== "off" ? "text-term-green" : mode === "active" ? "text-term-red animate-pulse" : "text-ink-dim hover:text-ink"
         }`}
         style={{ borderColor: mode === "active" ? "var(--accent)" : "var(--border)" }}
       >
