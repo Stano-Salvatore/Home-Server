@@ -141,7 +141,7 @@ export default function ChatIndexPage() {
               }
             }}
           />
-          <MicButton onText={(t) => setInput((v) => (v ? v + " " + t : t))} />
+          <MicButton onText={(t) => setInput((v) => (v ? v + " " + t : t))} onAutoSend={() => void start()} />
           <ModelPicker
             value={model as { backend: ChatBackend; modelId: string } | null}
             onChange={(v) => setModel({ backend: v.backend, modelId: v.modelId })}

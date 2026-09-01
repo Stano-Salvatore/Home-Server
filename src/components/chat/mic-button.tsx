@@ -1,37 +1,82 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Mic, Loader2 } from "lucide-react";
+import { Mic, Ear, Loader2 } from "lucide-react";
 
-// Streaming push-to-talk: tap to start, speak freely, tap to finish. Whisper
-// transcribes SEGMENTS, not a rolling stream, so "live" here means: a level
-// meter watches the mic, and each natural pause (~700ms of quiet) closes the
-// current segment, ships it to /api/voice/transcribe, and its text lands in
-// the input while the next sentence is already being spoken. Segments are
-// transcribed in order (a promise chain, not a race) so the text never
-// arrives shuffled. Silent segments are dropped without a round-trip.
+// Voice input, three modes:
+//   off    — nothing captured.
+//   active — dictation: segments transcribe at natural pauses, text lands in
+//            the input; after AUTO_SEND_MS of silence the message auto-sends.
+//   wake   — hands-free standby (Ear toggle): audio is captured and
+//            transcribed, but DISCARDED unless a segment contains the wake
+//            word ("Nedory" — plus the ways whisper mis-hears it). On a wake
+//            hit: chime, switch to active, and anything spoken after the
+//            name in the same breath is kept. After auto-send it returns to
+//            wake standby, so "Nedory … question … (pause) … Nedory …" chains
+//            turns without a single tap.
+// Whisper transcribes segments, not streams; the level meter closes a
+// segment after SILENCE_MS of quiet. Segments transcribe through an ordered
+// promise chain. Wake-mode transcripts never touch the input.
 
-const SILENCE_MS = 700; // quiet gap that closes a segment
-const MIN_SEGMENT_MS = 800; // ignore blips shorter than this
-const SPEECH_RMS = 0.015; // level above which we consider it speech
+const SILENCE_MS = 700;
+const MIN_SEGMENT_MS = 800;
+const SPEECH_RMS = 0.015;
+const AUTO_SEND_MS = 5000;
+// whisper's greatest hits for "Nedory", learned empirically
+const WAKE_RE = /\b(nedory|nedori|nedary|netary|netery|nedery)\b[,.!?]?\s*/i;
 
-export function MicButton({ onText }: { onText: (text: string) => void }) {
-  const [active, setActive] = useState(false);
-  const [pending, setPending] = useState(0); // segments still transcribing
+type Mode = "off" | "wake" | "active";
+
+export function MicButton({
+  onText,
+  onAutoSend,
+}: {
+  onText: (text: string) => void;
+  onAutoSend?: () => void;
+}) {
+  const [mode, setMode] = useState<Mode>("off");
+  const [pending, setPending] = useState(0);
   const [error, setError] = useState<string | null>(null);
 
+  const modeRef = useRef<Mode>("off");
+  const wakeWantedRef = useRef(false); // return to standby after auto-send?
   const streamRef = useRef<MediaStream | null>(null);
   const recRef = useRef<MediaRecorder | null>(null);
   const ctxRef = useRef<AudioContext | null>(null);
   const meterRef = useRef<number | null>(null);
   const chainRef = useRef<Promise<void>>(Promise.resolve());
-  const segStateRef = useRef({ start: 0, lastLoud: 0, sawSpeech: false });
-  const activeRef = useRef(false);
+  const segRef = useRef({ start: 0, lastLoud: 0, sawSpeech: false });
+  const sentAnyRef = useRef(false);
+  const cb = useRef({ onText, onAutoSend });
+  cb.current = { onText, onAutoSend };
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  useEffect(() => () => stop(), []); // unmount safety
+  useEffect(() => () => teardown(), []);
 
-  function transcribe(blob: Blob) {
+  function setModeBoth(m: Mode) {
+    modeRef.current = m;
+    setMode(m);
+  }
+
+  function chime() {
+    try {
+      const ctx = ctxRef.current;
+      if (!ctx) return;
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      gain.gain.value = 0.06;
+      osc.frequency.setValueAtTime(660, ctx.currentTime);
+      osc.frequency.setValueAtTime(990, ctx.currentTime + 0.12);
+      osc.start();
+      osc.stop(ctx.currentTime + 0.22);
+    } catch {
+      // a silent chime is not worth an error
+    }
+  }
+
+  function transcribe(blob: Blob, recordedIn: Mode) {
     if (blob.size < 1000) return;
     setPending((n) => n + 1);
     chainRef.current = chainRef.current.then(async () => {
@@ -41,7 +86,24 @@ export function MicButton({ onText }: { onText: (text: string) => void }) {
         const res = await fetch("/api/voice/transcribe", { method: "POST", body: form });
         const data = await res.json();
         if (!res.ok) throw new Error(data.error ?? `HTTP ${res.status}`);
-        if (data.text) onText(data.text);
+        const text: string = (data.text ?? "").trim();
+        if (!text) return;
+        if (recordedIn === "active" && modeRef.current === "active") {
+          cb.current.onText(text);
+          sentAnyRef.current = true;
+        } else if (recordedIn === "wake" && modeRef.current === "wake") {
+          const m = text.match(WAKE_RE);
+          if (m) {
+            chime();
+            setModeBoth("active");
+            segRef.current.lastLoud = Date.now(); // fresh silence clock
+            const rest = text.slice((m.index ?? 0) + m[0].length).trim();
+            if (rest) {
+              cb.current.onText(rest);
+              sentAnyRef.current = true;
+            }
+          }
+        }
       } catch (err) {
         setError(err instanceof Error ? err.message : String(err));
       } finally {
@@ -53,32 +115,31 @@ export function MicButton({ onText }: { onText: (text: string) => void }) {
   function startSegment(stream: MediaStream) {
     const rec = new MediaRecorder(stream);
     const chunks: Blob[] = [];
+    const recordedIn = modeRef.current;
     rec.ondataavailable = (e) => {
       if (e.data.size > 0) chunks.push(e.data);
     };
-    const seg = segStateRef.current;
+    const seg = segRef.current;
     rec.onstop = () => {
       if (seg.sawSpeech && Date.now() - seg.start >= MIN_SEGMENT_MS) {
-        transcribe(new Blob(chunks, { type: rec.mimeType || "audio/webm" }));
+        transcribe(new Blob(chunks, { type: rec.mimeType || "audio/webm" }), recordedIn);
       }
-      if (activeRef.current && streamRef.current) startSegment(streamRef.current);
+      if (modeRef.current !== "off" && streamRef.current) startSegment(streamRef.current);
     };
     seg.start = Date.now();
-    seg.lastLoud = Date.now();
     seg.sawSpeech = false;
     rec.start();
     recRef.current = rec;
   }
 
-  async function start() {
+  async function begin(target: Mode) {
     setError(null);
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       streamRef.current = stream;
-      activeRef.current = true;
-      setActive(true);
+      sentAnyRef.current = false;
+      setModeBoth(target);
 
-      // level meter drives segmentation
       const ctx = new AudioContext();
       ctxRef.current = ctx;
       const src = ctx.createMediaStreamSource(stream);
@@ -86,6 +147,7 @@ export function MicButton({ onText }: { onText: (text: string) => void }) {
       analyser.fftSize = 1024;
       src.connect(analyser);
       const buf = new Float32Array(analyser.fftSize);
+      segRef.current.lastLoud = Date.now();
 
       startSegment(stream);
       meterRef.current = window.setInterval(() => {
@@ -93,7 +155,7 @@ export function MicButton({ onText }: { onText: (text: string) => void }) {
         let sum = 0;
         for (let i = 0; i < buf.length; i++) sum += buf[i] * buf[i];
         const rms = Math.sqrt(sum / buf.length);
-        const seg = segStateRef.current;
+        const seg = segRef.current;
         const now = Date.now();
         if (rms > SPEECH_RMS) {
           seg.lastLoud = now;
@@ -104,19 +166,33 @@ export function MicButton({ onText }: { onText: (text: string) => void }) {
           now - seg.start >= MIN_SEGMENT_MS &&
           recRef.current?.state === "recording"
         ) {
-          recRef.current.stop(); // onstop ships the segment and starts the next
+          recRef.current.stop();
+        }
+        // hands-free send: dictated text exists, nothing in flight, 5s quiet
+        if (
+          modeRef.current === "active" &&
+          sentAnyRef.current &&
+          now - seg.lastLoud >= AUTO_SEND_MS
+        ) {
+          setPending((p) => {
+            if (p === 0) {
+              sentAnyRef.current = false;
+              cb.current.onAutoSend?.();
+              if (wakeWantedRef.current) setModeBoth("wake");
+              else teardown();
+            }
+            return p;
+          });
         }
       }, 100);
     } catch {
       setError("Microphone access denied");
-      activeRef.current = false;
-      setActive(false);
+      teardown();
     }
   }
 
-  function stop() {
-    activeRef.current = false;
-    setActive(false);
+  function teardown() {
+    setModeBoth("off");
     if (meterRef.current !== null) {
       clearInterval(meterRef.current);
       meterRef.current = null;
@@ -129,18 +205,58 @@ export function MicButton({ onText }: { onText: (text: string) => void }) {
     ctxRef.current = null;
   }
 
+  function clickMic() {
+    if (mode === "active") {
+      if (wakeWantedRef.current) setModeBoth("wake");
+      else teardown();
+    } else if (mode === "wake") {
+      setModeBoth("active"); // manual takeover from standby
+      segRef.current.lastLoud = Date.now();
+    } else {
+      wakeWantedRef.current = false;
+      void begin("active");
+    }
+  }
+
+  function clickEar() {
+    if (mode === "off") {
+      wakeWantedRef.current = true;
+      void begin("wake");
+    } else {
+      wakeWantedRef.current = false;
+      teardown();
+    }
+  }
+
   return (
-    <span className="relative">
+    <span className="relative flex items-center gap-1">
       <button
-        onClick={() => (active ? stop() : start())}
-        aria-label={active ? "Stop listening" : "Start voice input"}
-        title={error ?? (active ? "Listening — tap to finish" : "Tap to speak")}
+        onClick={clickEar}
+        aria-label={mode === "off" ? "Enable wake word (Nedory)" : "Disable wake word"}
+        title={
+          mode === "wake"
+            ? "Standing by for “Nedory” — tap to disable"
+            : mode === "off"
+              ? "Hands-free: listen for “Nedory”"
+              : "Disable hands-free"
+        }
         className={`rounded-lg border p-2 transition-colors ${
-          active ? "text-term-red animate-pulse" : "text-ink-dim hover:text-ink"
+          mode === "wake" ? "text-accent" : "text-ink-dim hover:text-ink"
         }`}
-        style={{ borderColor: active ? "var(--accent)" : "var(--border)" }}
+        style={{ borderColor: mode === "wake" ? "var(--accent)" : "var(--border)" }}
       >
-        {!active && pending > 0 ? <Loader2 size={16} className="animate-spin" /> : <Mic size={16} />}
+        <Ear size={16} />
+      </button>
+      <button
+        onClick={clickMic}
+        aria-label={mode === "active" ? "Stop dictation" : "Start dictation"}
+        title={error ?? (mode === "active" ? "Listening — pause 5s to send" : "Tap to speak")}
+        className={`rounded-lg border p-2 transition-colors ${
+          mode === "active" ? "text-term-red animate-pulse" : "text-ink-dim hover:text-ink"
+        }`}
+        style={{ borderColor: mode === "active" ? "var(--accent)" : "var(--border)" }}
+      >
+        {mode === "off" && pending > 0 ? <Loader2 size={16} className="animate-spin" /> : <Mic size={16} />}
       </button>
       {error && (
         <span
