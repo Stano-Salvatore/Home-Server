@@ -38,6 +38,7 @@ export function MicButton({
   const [pending, setPending] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [hearing, setHearing] = useState(false);
+  const [hearing, setHearing] = useState(false);
 
   const modeRef = useRef<Mode>("off");
   const wakeWantedRef = useRef(false); // return to standby after auto-send?
@@ -159,6 +160,7 @@ export function MicButton({
         const seg = segRef.current;
         const now = Date.now();
         setHearing(rms > SPEECH_RMS);
+        setHearing(rms > SPEECH_RMS);
         if (rms > SPEECH_RMS) {
           seg.lastLoud = now;
           seg.sawSpeech = true;
@@ -195,6 +197,7 @@ export function MicButton({
 
   function teardown() {
     setModeBoth("off");
+    setHearing(false);
     setHearing(false);
     if (meterRef.current !== null) {
       clearInterval(meterRef.current);
@@ -255,7 +258,7 @@ export function MicButton({
         aria-label={mode === "active" ? "Stop dictation" : "Start dictation"}
         title={error ?? (mode === "active" ? "Listening — pause 5s to send" : "Tap to speak")}
         className={`rounded-lg border p-2 transition-colors ${
-          hearing && mode !== "off" ? "text-term-green" : mode === "active" ? "text-term-red animate-pulse" : "text-ink-dim hover:text-ink"
+          hearing && mode !== "off" ? "text-term-green" : hearing && mode !== "off" ? "text-term-green" : mode === "active" ? "text-term-red animate-pulse" : "text-ink-dim hover:text-ink"
         }`}
         style={{ borderColor: mode === "active" ? "var(--accent)" : "var(--border)" }}
       >
