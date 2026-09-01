@@ -30,6 +30,12 @@ const AppConfigSchema = z.object({
   // Ollama (e.g. the dashboard phone's own localhost) to keep the embedding
   // model off the compute node so it doesn't fight the chat model for RAM.
   embeddingHost: z.string().default(""),
+  // Cross-encoder rerank server (llama.cpp --rerank, /v1/rerank). Empty = the
+  // rerank stage is off and retrieval keeps plain RRF order.
+  rerankUrl: z.string().default(""),
+  // whisper.cpp server for browser-mic transcription (/inference). Empty =
+  // no STT node; the mic button reports it instead of failing silently.
+  whisperUrl: z.string().default(""),
   // Optional Qdrant vector DB. Blank = keep the vector index in this process's
   // RAM (fine for notes; won't scale to gigabytes on a phone). Set to a Qdrant
   // URL (e.g. the Lenovo services box) to hold vectors off-device instead.
@@ -92,6 +98,8 @@ const ENV_DEFAULTS: Record<keyof AppConfig, string | undefined> = {
   litertlmModelId: process.env.LITERTLM_MODEL_ID,
   embeddingModel: process.env.EMBEDDING_MODEL,
   embeddingHost: process.env.EMBEDDING_HOST,
+  rerankUrl: process.env.RERANK_URL,
+  whisperUrl: process.env.WHISPER_URL,
   qdrantUrl: process.env.QDRANT_URL,
   qdrantCollection: process.env.QDRANT_COLLECTION,
   wikipediaProvider: process.env.WIKIPEDIA_PROVIDER,
