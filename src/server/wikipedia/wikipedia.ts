@@ -69,13 +69,63 @@ async function kiwixBooks(kiwixUrl: string): Promise<string[]> {
   }
 }
 
+// Kiwix's /suggest is a title-prefix matcher: it answers "Vladimír Boudník"
+// but not "Kto bol Vladimír Boudník? Krátko." — so a natural question found
+// nothing and the whole offline path looked dead. Strip the question scaffolding
+// (cs/sk/en) before suggesting, and when even that finds no title, fall back to
+// kiwix's Xapian fulltext /search and take its top result.
+const QUESTION_NOISE = new Set([
+  // sk/cs
+  "kto", "kdo", "bol", "byl", "bola", "byla", "je", "sú", "jsou", "čo", "co",
+  "aký", "jaký", "aká", "jaká", "ake", "aké", "jaké", "kde", "kedy", "kdy",
+  "prečo", "proč", "ako", "jak", "ktorý", "který", "ktorá", "která", "mi", "o",
+  "povedz", "řekni", "krátko", "krátce", "stručne", "stručně",
+  // en
+  "who", "what", "was", "is", "are", "were", "the", "a", "an", "tell", "me",
+  "about", "briefly", "please", "short",
+]);
+
+function stripQuestionNoise(query: string): string {
+  const cleaned = query
+    .replace(/[?!.,;:"„“]/g, " ")
+    .split(/\s+/)
+    .filter((w) => w && !QUESTION_NOISE.has(w.toLowerCase()))
+    .join(" ")
+    .trim();
+  return cleaned || query;
+}
+
+async function kiwixFulltextBook(
+  root: string,
+  book: string,
+  query: string,
+  lang: string,
+): Promise<WikiHit | null> {
+  try {
+    const url = `${root}/search?books.name=${encodeURIComponent(book)}&pattern=${encodeURIComponent(query)}&pageLength=3`;
+    const html = await fetchText(url);
+    const m = html.match(new RegExp(`href="/content/${book}/([^"]+)"`));
+    if (!m) return null;
+    const path = decodeURIComponent(m[1]);
+    const page = await fetchText(`${root}/content/${book}/${m[1]}`);
+    const text = htmlToText(page, { wordwrap: false, selectors: [{ selector: "a", options: { ignoreHref: true } }] });
+    const extract = text.replace(/\s+\n/g, "\n").trim().slice(0, MAX_EXTRACT_CHARS);
+    if (!extract) return null;
+    const title = path.split("/").pop()?.replace(/_/g, " ") ?? query;
+    return { title, extract, lang, url: `${root}/viewer#${book}/${m[1]}` };
+  } catch {
+    return null;
+  }
+}
+
 async function kiwixSearchBook(kiwixUrl: string, book: string, query: string, lang: string): Promise<WikiHit | null> {
   try {
     const root = kiwixUrl.replace(/\/$/, "");
-    const suggestUrl = `${root}/suggest?content=${encodeURIComponent(book)}&term=${encodeURIComponent(query)}`;
+    const term = stripQuestionNoise(query);
+    const suggestUrl = `${root}/suggest?content=${encodeURIComponent(book)}&term=${encodeURIComponent(term)}`;
     const suggestions = (await fetchJson(suggestUrl)) as { value?: string; label?: string; path?: string }[];
     const top = suggestions.find((s) => s.value || s.path);
-    if (!top) return null;
+    if (!top) return await kiwixFulltextBook(root, book, term, lang);
     const title = top.value ?? "";
     const path = top.path ?? `A/${(title || query).replace(/ /g, "_")}`;
     const html = await fetchText(`${root}/content/${book}/${path}`);
