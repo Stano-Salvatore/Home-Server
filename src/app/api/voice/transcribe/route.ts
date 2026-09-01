@@ -50,7 +50,7 @@ export async function POST(req: NextRequest) {
     const res = await fetch(`${whisperUrl.replace(/\/$/, "")}/inference`, {
       method: "POST",
       body,
-      signal: AbortSignal.timeout(60000),
+      signal: AbortSignal.timeout(180000),
     });
     if (!res.ok) {
       return NextResponse.json({ error: `STT server: ${res.status}` }, { status: 502 });
