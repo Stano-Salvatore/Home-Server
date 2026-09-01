@@ -183,7 +183,7 @@ export default function ConversationPage({ params }: { params: Promise<{ id: str
             }}
           />
           {!streaming && (
-            <MicButton onText={(t) => setInput((v) => (v ? v + " " + t : t))} />
+            <MicButton onText={(t) => setInput((v) => (v ? v + " " + t : t))} onAutoSend={handleSend} />
           )}
           {streaming ? (
             <button
