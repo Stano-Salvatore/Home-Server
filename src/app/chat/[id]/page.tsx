@@ -4,6 +4,7 @@ import { useEffect, useRef, useState, use as usePromise } from "react";
 import { useChatStream } from "@/lib/useChatStream";
 import { MessageBubble } from "@/components/chat/message-bubble";
 import { ModelPicker } from "@/components/chat/model-picker";
+import { MicButton } from "@/components/chat/mic-button";
 import { PillToggle } from "@/components/ui/pill-toggle";
 import { ArrowUp, Square, RefreshCw } from "lucide-react";
 import type { ChatBackend } from "@/lib/types";
@@ -181,6 +182,9 @@ export default function ConversationPage({ params }: { params: Promise<{ id: str
               }
             }}
           />
+          {!streaming && (
+            <MicButton onText={(t) => setInput((v) => (v ? v + " " + t : t))} />
+          )}
           {streaming ? (
             <button
               onClick={stop}
