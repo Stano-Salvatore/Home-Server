@@ -3,6 +3,23 @@ import { mcpConnect, mcpListTools, mcpCallTool, type McpSession } from "@/server
 import { getBuiltinTools } from "./builtin";
 import type { ToolDef } from "./types";
 
+// "startDate (string, required): Start date YYYY-MM-DD; endDate (string): …"
+// Kept deliberately prose-like — the planner is a small local model, and a
+// readable line beats a JSON Schema blob at that size.
+function renderArgsHint(schema: unknown): string | undefined {
+  if (!schema || typeof schema !== "object") return undefined;
+  const props = (schema as { properties?: Record<string, { type?: string; description?: string }> }).properties;
+  if (!props || Object.keys(props).length === 0) return undefined;
+  const required = new Set((schema as { required?: string[] }).required ?? []);
+  const parts = Object.entries(props).map(([key, p]) => {
+    const req = required.has(key) ? ", required" : "";
+    const desc = p.description ? `: ${p.description}` : "";
+    return `${key} (${p.type ?? "any"}${req})${desc}`;
+  });
+  const hint = parts.join("; ");
+  return hint.length > 300 ? hint.slice(0, 297) + "…" : hint;
+}
+
 export type ToolContext = {
   tools: ToolDef[];
   call: (name: string, args: Record<string, unknown>) => Promise<string>;
@@ -42,7 +59,11 @@ export async function buildToolContext(agent: Agent): Promise<ToolContext | null
         const tools = await mcpListTools(session);
         for (const tool of tools) {
           const qualified = qualify(server.id, tool.name);
-          defs.push({ name: qualified, description: tool.description ?? tool.name });
+          defs.push({
+            name: qualified,
+            description: tool.description ?? tool.name,
+            argsHint: renderArgsHint(tool.inputSchema),
+          });
           dispatch.set(qualified, (args) => mcpCallTool(session, tool.name, args));
         }
       } catch {

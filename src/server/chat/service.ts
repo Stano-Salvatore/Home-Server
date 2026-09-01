@@ -416,7 +416,11 @@ async function* streamAssistant(
       if (toolCtx) {
         yield { status: `${agent.name} is checking its tools…` };
         const { planToolCalls } = await import("@/server/tools/planner");
-        const calls = await planToolCalls(userContent, toolCtx.tools);
+        const calls = await planToolCalls(
+          userContent,
+          toolCtx.tools,
+          conversation.backend === "ollama" ? conversation.modelId : undefined,
+        );
         if (calls.length > 0) {
           const results = await Promise.all(
             calls.map(async (c, i) => {

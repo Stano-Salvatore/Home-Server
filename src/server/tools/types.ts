@@ -4,6 +4,11 @@
 export type ToolDef = {
   name: string;
   description: string;
+  // Compact one-line rendering of the tool's parameters ("startDate (string,
+  // required): Start date YYYY-MM-DD; …"), derived from the MCP inputSchema.
+  // Without it the planner invents or omits args — a schema-required date
+  // range fails validation and the whole tool silently contributes nothing.
+  argsHint?: string;
 };
 
 export type ToolCall = { tool: string; args: Record<string, unknown> };
