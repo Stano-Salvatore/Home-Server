@@ -38,7 +38,6 @@ export function MicButton({
   const [pending, setPending] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [hearing, setHearing] = useState(false);
-  const [hearing, setHearing] = useState(false);
 
   const modeRef = useRef<Mode>("off");
   const wakeWantedRef = useRef(false); // return to standby after auto-send?
