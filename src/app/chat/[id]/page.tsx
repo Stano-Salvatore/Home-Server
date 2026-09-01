@@ -147,7 +147,7 @@ export default function ConversationPage({ params }: { params: Promise<{ id: str
           <p className="text-sm text-neutral-600">Say something to get started.</p>
         )}
         {messages.map((m) => (
-          <MessageBubble key={m.id} message={m} modelLabel={conversation?.modelId} />
+          <MessageBubble key={m.id} message={m} modelLabel={conversation?.modelId.split("::").pop()?.replace(/:latest$/, "")} />
         ))}
         {canRegenerate && (
           <button

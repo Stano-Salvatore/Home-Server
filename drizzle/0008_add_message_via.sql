@@ -1,0 +1,1 @@
+ALTER TABLE `messages` ADD `via_json` text;

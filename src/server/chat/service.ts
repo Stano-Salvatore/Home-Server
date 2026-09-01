@@ -2,6 +2,7 @@ import { eq, desc } from "drizzle-orm";
 import { db } from "@/server/db/client";
 import { conversations, messages } from "@/server/db/schema";
 import { backendFor } from "@/server/backends/registry";
+import { primaryRoute, fallbackRoutes, describeRoute, type ChatRoute, type ChatVia } from "./fallback";
 import type { ChatMessage, BackendKind } from "@/server/backends/types";
 import { newId } from "@/server/util/hash";
 import { listMemoryFacts } from "@/server/brain/memory";
@@ -197,7 +198,7 @@ async function* streamAssistant(
   conversation: Conversation,
   userContent: string,
   signal?: AbortSignal,
-): AsyncGenerator<{ delta?: string; citations?: Citation[]; stats?: GenStats; status?: string }> {
+): AsyncGenerator<{ delta?: string; citations?: Citation[]; stats?: GenStats; status?: string; via?: ChatVia }> {
   const conversationId = conversation.id;
   const history = listMessages(conversationId).slice(-HISTORY_LIMIT);
   const chatMessages: ChatMessage[] = [];
@@ -415,7 +416,11 @@ async function* streamAssistant(
       if (toolCtx) {
         yield { status: `${agent.name} is checking its tools…` };
         const { planToolCalls } = await import("@/server/tools/planner");
-        const calls = await planToolCalls(userContent, toolCtx.tools);
+        const calls = await planToolCalls(
+          userContent,
+          toolCtx.tools,
+          conversation.backend === "ollama" ? conversation.modelId : undefined,
+        );
         if (calls.length > 0) {
           const results = await Promise.all(
             calls.map(async (c, i) => {
@@ -446,18 +451,46 @@ async function* streamAssistant(
   // litert-lm the CPU prefill after this line is the longest silent phase.
   yield { status: "writing a reply…" };
 
-  const backend = backendFor(conversation.backend as BackendKind);
+  const requested = primaryRoute(conversation.backend as BackendKind, conversation.modelId);
+  let via: ChatVia | undefined;
   let full = "";
   let reportedTokenCount: number | undefined;
   let stats: GenStats | undefined;
   const startedAt = Date.now();
   try {
-    for await (const chunk of backend.chatStream(conversation.modelId, chatMessages, signal)) {
-      if (chunk.text) {
-        full += chunk.text;
-        yield { delta: chunk.text };
+    // Try the conversation's own target first; if it cannot produce a single
+    // token (node asleep, unplugged, off the tailnet), walk the fallback
+    // chain instead of failing the send. A failure AFTER text has streamed is
+    // not retried — splicing two models into one reply would be worse than
+    // surfacing the error — and an abort is the user's, never rerouted.
+    let alternates: ChatRoute[] | undefined;
+    let attempt = 0;
+    let route: ChatRoute = requested;
+    for (;;) {
+      const backend = backendFor(route.backend);
+      try {
+        for await (const chunk of backend.chatStream(route.modelId, chatMessages, signal)) {
+          if (chunk.text) {
+            full += chunk.text;
+            yield { delta: chunk.text };
+          }
+          if (chunk.tokenCount !== undefined) reportedTokenCount = chunk.tokenCount;
+        }
+        if (attempt > 0) via = { ...route, fallbackFrom: requested };
+        break;
+      } catch (err) {
+        if (full !== "" || signal?.aborted) throw err;
+        if (alternates === undefined) alternates = await fallbackRoutes(requested);
+        const next = alternates[attempt];
+        if (!next) throw err;
+        console.error(
+          `[chat] ${describeRoute(route)} unreachable, falling back to ${describeRoute(next)}:`,
+          err,
+        );
+        yield { status: `${describeRoute(route)} is unreachable — answering from ${describeRoute(next)}…` };
+        attempt += 1;
+        route = next;
       }
-      if (chunk.tokenCount !== undefined) reportedTokenCount = chunk.tokenCount;
     }
   } finally {
     if (full) {
@@ -472,6 +505,7 @@ async function* streamAssistant(
           role: "assistant",
           content: full,
           citationsJson: citations ? JSON.stringify(citations) : null,
+          viaJson: via ? JSON.stringify(via) : null,
           durationMs,
           tokenCount,
         })
@@ -517,13 +551,14 @@ async function* streamAssistant(
 
   if (citations) yield { citations };
   if (stats) yield { stats };
+  if (via) yield { via };
 }
 
 export async function* sendMessage(
   conversationId: string,
   userContent: string,
   signal?: AbortSignal,
-): AsyncGenerator<{ delta?: string; citations?: Citation[]; stats?: GenStats; status?: string }> {
+): AsyncGenerator<{ delta?: string; citations?: Citation[]; stats?: GenStats; status?: string; via?: ChatVia }> {
   const conversation = getConversation(conversationId);
   if (!conversation) throw new Error("Conversation not found");
 
@@ -541,7 +576,7 @@ export async function* sendMessage(
 export async function* regenerateLast(
   conversationId: string,
   signal?: AbortSignal,
-): AsyncGenerator<{ delta?: string; citations?: Citation[]; stats?: GenStats; status?: string }> {
+): AsyncGenerator<{ delta?: string; citations?: Citation[]; stats?: GenStats; status?: string; via?: ChatVia }> {
   const conversation = getConversation(conversationId);
   if (!conversation) throw new Error("Conversation not found");
 
