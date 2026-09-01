@@ -21,6 +21,7 @@ import {
   Menu,
   X,
   LogOut,
+  Swords,
 } from "lucide-react";
 
 // Grouped like Odysseus's rail: thin separators between clusters of
@@ -31,6 +32,7 @@ const NAV_GROUPS = [
     { href: "/projects", label: "projects", icon: FolderKanban },
     { href: "/agents", label: "agents", icon: Bot },
     { href: "/council", label: "council", icon: Users },
+    { href: "/compare", label: "compare", icon: Swords },
   ],
   [
     { href: "/brain", label: "brain", icon: BrainCircuit },
