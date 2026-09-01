@@ -162,7 +162,14 @@ async function kiwixSearch(query: string, urls: string[], langs: string[]): Prom
     for (const url of urls) {
       const books = await booksOf(url);
       // Match a served book to the language, e.g. "wikipedia_en_all_nopic_2024".
-      const book = books.find((b) => new RegExp(`[_.-]${lang}[_.-]`).test(b)) ?? books[0];
+      // Prefer actual wikipedia books: with Gutenberg/Wikisource ZIMs on the
+      // same host, "gutenberg_en_all" sorts before "wikipedia_en_all" and would
+      // hijack every English query.
+      const langRe = new RegExp(`[_.-]${lang}[_.-]`);
+      const book =
+        books.find((b) => b.startsWith("wikipedia") && langRe.test(b)) ??
+        books.find((b) => langRe.test(b)) ??
+        books[0];
       if (!book) continue;
       const hit = await kiwixSearchBook(url, book, query, lang);
       if (hit) {
