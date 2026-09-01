@@ -89,8 +89,13 @@ function systemPrompt(tools: ToolDef[]): string {
   const today = new Date().toLocaleDateString("sv-SE", { timeZone: "Europe/Bratislava" });
   const weekday = new Date().toLocaleDateString("en-GB", { weekday: "long", timeZone: "Europe/Bratislava" });
   const yesterday = new Date(Date.now() - 86400000).toLocaleDateString("sv-SE", { timeZone: "Europe/Bratislava" });
+  // Small models cannot do date arithmetic reliably — hand them every anchor
+  // they might need instead of letting them guess (observed: a 31-day range
+  // rendered as a two-week window ending in the future).
+  const daysAgo = (n: number) =>
+    new Date(Date.now() - n * 86400000).toLocaleDateString("sv-SE", { timeZone: "Europe/Bratislava" });
   return (
-    `Today is ${weekday} ${today} — use this exact year for all relative dates; yesterday was ${yesterday}. For date-range args be inclusive: last night / yesterday means startDate=${yesterday}, endDate=${today}. ` +
+    `Today is ${weekday} ${today} — use this exact year for all relative dates; yesterday was ${yesterday}. Date anchors: 7 days ago was ${daysAgo(7)}, 14 days ago ${daysAgo(14)}, 30 days ago ${daysAgo(30)}, 90 days ago ${daysAgo(90)}. For date-range args be inclusive and use these anchors verbatim: last night / yesterday means startDate=${yesterday}, endDate=${today}; last week startDate=${daysAgo(7)}; last month startDate=${daysAgo(30)}. endDate must NEVER be after ${today}. ` +
     `You decide which tools (if any) are needed to answer the user's question. Available tools:\n${list}\n\n` +
     `Reply with ONLY a JSON object, no prose, no markdown fences: {"calls": [{"tool": string, "args": object}]}. ` +
     `Use at most ${MAX_CALLS} calls, only the ones actually relevant — most questions need zero or one. ` +
