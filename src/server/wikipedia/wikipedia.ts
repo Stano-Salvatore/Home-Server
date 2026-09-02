@@ -159,6 +159,22 @@ async function kiwixFulltextBook(
   }
 }
 
+function foldAccents(s: string): string {
+  return s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
+}
+
+/** Does a prefix-matcher's answer actually correspond to what was asked? */
+function titleMatchesTerm(title: string, term: string): boolean {
+  const t = foldAccents(title).trim();
+  const q = foldAccents(term).trim();
+  if (!t || !q) return false;
+  if (t.includes(q) || q.includes(t)) return true;
+  // Accept a shared substantial word, so "Vladimir Boudnik grafik" still
+  // matches the article "Vladimír Boudník".
+  const titleWords = new Set(t.split(/[^\p{L}\p{N}]+/u).filter((w) => w.length >= 4));
+  return q.split(/[^\p{L}\p{N}]+/u).some((w) => w.length >= 4 && titleWords.has(w));
+}
+
 async function kiwixSearchBook(kiwixUrl: string, book: string, query: string, lang: string): Promise<WikiHit | null> {
   try {
     const root = kiwixUrl.replace(/\/$/, "");
@@ -166,7 +182,15 @@ async function kiwixSearchBook(kiwixUrl: string, book: string, query: string, la
     const suggestUrl = `${root}/suggest?content=${encodeURIComponent(book)}&term=${encodeURIComponent(term)}`;
     const suggestions = (await fetchJson(suggestUrl)) as { value?: string; label?: string; path?: string }[];
     const top = suggestions.find((s) => s.value || s.path);
-    if (!top) return await kiwixFulltextBook(root, book, term, lang);
+    // Kiwix's suggester answers even a misspelling with its nearest title —
+    // "toscin" comes back as "Arturo Toscanini". Grounding on that cites a
+    // conductor at someone asking about an alarm bell, so an answer that
+    // doesn't correspond to the term is discarded and the query goes to
+    // fulltext instead, which legitimately returns differently-titled
+    // articles ("faux pas" -> a glossary of French expressions).
+    if (!top || !titleMatchesTerm(top.value ?? "", term)) {
+      return await kiwixFulltextBook(root, book, term, lang);
+    }
     const title = top.value ?? "";
     const path = top.path ?? `A/${(title || query).replace(/ /g, "_")}`;
     const html = await fetchText(`${root}/content/${book}/${path}`);
