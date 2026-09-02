@@ -40,6 +40,14 @@ const AppConfigSchema = z.object({
   wikipediaProvider: z.string().default("online"),
   kiwixUrl: z.string().default(""),
   wikipediaLangs: z.string().default("en,cs"),
+  // Non-encyclopedia ZIMs to consult alongside the wikis, by book name
+  // (comma-separated, e.g. "wiktionary_en_all"). A dictionary earns its place
+  // here: it defines borrowed terms — "faux pas", "déjà vu", Latin phrases in
+  // old books — that an encyclopedia only covers when they're notable enough
+  // for an article. Full-text book ZIMs (Gutenberg, Wikisource) are
+  // deliberately NOT listed by default: one arbitrary novel page per query is
+  // noise as grounding. Those are for reading, at the kiwix UI itself.
+  kiwixExtraBooks: z.string().default(""),
   // Web search grounding: "duckduckgo" works with zero setup; "searxng"
   // keeps the whole pipeline self-hosted (set searxngUrl); "brave" needs an
   // API key; "disabled" turns the Web toggle into a no-op.
@@ -97,6 +105,7 @@ const ENV_DEFAULTS: Record<keyof AppConfig, string | undefined> = {
   wikipediaProvider: process.env.WIKIPEDIA_PROVIDER,
   kiwixUrl: process.env.KIWIX_URL,
   wikipediaLangs: process.env.WIKIPEDIA_LANGS,
+  kiwixExtraBooks: process.env.KIWIX_EXTRA_BOOKS,
   webSearchProvider: process.env.WEB_SEARCH_PROVIDER,
   searxngUrl: process.env.SEARXNG_URL,
   braveApiKey: process.env.BRAVE_API_KEY,
