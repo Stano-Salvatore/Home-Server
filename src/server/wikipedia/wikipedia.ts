@@ -271,8 +271,80 @@ async function onlineSearch(query: string, langs: string[]): Promise<WikiHit[]> 
   return results.filter((h): h is WikiHit => h !== null);
 }
 
-/** Retrieve grounding context from Wikipedia for a query. Never throws. */
-export async function wikipediaSearch(query: string): Promise<WikiHit[]> {
+/**
+ * One-edit neighbours of a word: adjacent transpositions and single deletions.
+ * Those two cover the typos people actually make — "toscin" is a transposition
+ * of "tocsin" — and unlike substitutions and insertions there is only a
+ * handful, so every one can be probed against the local index in the time a
+ * remote spellchecker would need to answer once. Multi-word terms are left
+ * alone: a phrase that missed is rarely one keystroke from a real title.
+ */
+function typoVariants(term: string): string[] {
+  const w = term.trim();
+  if (!/^\p{L}{4,20}$/u.test(w)) return [];
+  const out = new Set<string>();
+  for (let i = 0; i < w.length - 1; i++) {
+    out.add(w.slice(0, i) + w[i + 1] + w[i] + w.slice(i + 2));
+  }
+  for (let i = 0; i < w.length; i++) out.add(w.slice(0, i) + w.slice(i + 1));
+  out.delete(w);
+  return [...out];
+}
+
+/** Real titles a single typo away from a term that found nothing. */
+async function kiwixNearbyTitles(
+  term: string,
+  urls: string[],
+  langs: string[],
+): Promise<string[]> {
+  const variants = typoVariants(term);
+  if (variants.length === 0) return [];
+  const found: string[] = [];
+  for (const url of urls) {
+    const books = await kiwixBooks(url);
+    // The dictionary first — it holds plain words, where a typo is likeliest —
+    // then the reader's own languages.
+    const candidates = [
+      ...extraBooksList().flatMap((w) => books.filter((b) => b.startsWith(w))),
+      ...langs.flatMap((l) =>
+        books.filter((b) => b.startsWith("wikipedia") && new RegExp(`[_.-]${l}[_.-]`).test(b)),
+      ),
+    ].slice(0, 2);
+    for (const book of candidates) {
+      const results = await Promise.all(
+        variants.map(async (v) => {
+          try {
+            const s = (await fetchJson(
+              `${url}/suggest?content=${encodeURIComponent(book)}&term=${encodeURIComponent(v)}`,
+            )) as { value?: string }[];
+            const top = s[0]?.value;
+            // Strict here: a suggestion for a typo variant only counts when it
+            // IS that word. Anything looser would offer "did you mean
+            // Toscanini?" to someone who typed an alarm bell.
+            return top && foldAccents(top) === foldAccents(v) ? top : null;
+          } catch {
+            return null;
+          }
+        }),
+      );
+      for (const t of results) {
+        if (t && !found.some((f) => foldAccents(f) === foldAccents(t))) found.push(t);
+      }
+      if (found.length >= 4) return found.slice(0, 4);
+    }
+  }
+  return found.slice(0, 4);
+}
+
+export type WikiLookup = { hits: WikiHit[]; nearby: string[] };
+
+/**
+ * Retrieve grounding from the encyclopedias and the dictionary. When nothing
+ * matches, `nearby` carries real titles a single typo away, so the reply can
+ * ask "did you mean…" instead of inventing a meaning or going silent.
+ * Never throws.
+ */
+export async function wikipediaLookup(query: string): Promise<WikiLookup> {
   const settings = loadSettings();
   const langs = langsList();
   try {
@@ -280,13 +352,28 @@ export async function wikipediaSearch(query: string): Promise<WikiHit[]> {
       const urls = kiwixUrls();
       if (urls.length) {
         const hits = await kiwixSearch(query, urls, langs);
-        if (hits.length > 0) return hits;
+        const term = stripQuestionNoise(query);
+        const exact = hits.some((h) => foldAccents(h.title) === foldAccents(term));
+        if (hits.length > 0 && exact) return { hits, nearby: [] };
+        // Either nothing matched, or only loosely: a prefix matcher answers
+        // "toscin" with "Arturo Toscinini", which contains the string without
+        // being the word. An exact hit on a one-edit neighbour ("tocsin")
+        // beats that. When no neighbour is a real title — "explosionalism"
+        // legitimately finding "Explosionalismus" — the loose hit stands.
+        const nearby = await kiwixNearbyTitles(term, urls, langs);
+        if (nearby.length > 0) return { hits: [], nearby };
+        if (hits.length > 0) return { hits, nearby: [] };
       }
       // No offline hit — fall back to the live API if we happen to be online.
-      return await onlineSearch(query, langs);
+      return { hits: await onlineSearch(query, langs), nearby: [] };
     }
-    return await onlineSearch(query, langs);
+    return { hits: await onlineSearch(query, langs), nearby: [] };
   } catch {
-    return [];
+    return { hits: [], nearby: [] };
   }
+}
+
+/** Retrieve grounding context from Wikipedia for a query. Never throws. */
+export async function wikipediaSearch(query: string): Promise<WikiHit[]> {
+  return (await wikipediaLookup(query)).hits;
 }
