@@ -172,11 +172,11 @@ export async function getWikipediaContext(
     const hits = await wikipediaSearch(query);
     if (hits.length === 0) return null;
     const block = hits
-      .map((h, i) => `[W${i + 1}] (Wikipedia ${h.lang}: ${h.title}) ${h.extract}`)
+      .map((h, i) => `[W${i + 1}] (${h.source ?? "Wikipedia"} ${h.lang}: ${h.title}) ${h.extract}`)
       .join("\n\n");
     const citations: Citation[] = hits.map((h) => ({
       documentId: `wiki:${h.lang}:${h.title}`,
-      title: `Wikipedia (${h.lang}): ${h.title}`,
+      title: `${h.source ?? "Wikipedia"} (${h.lang}): ${h.title}`,
       sourcePath: h.url,
       snippet: h.extract.slice(0, 200),
     }));
