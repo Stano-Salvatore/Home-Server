@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowUp } from "lucide-react";
 import { ModelPicker } from "@/components/chat/model-picker";
+import { MicButton } from "@/components/chat/mic-button";
 import { PillToggle } from "@/components/ui/pill-toggle";
 import type { ChatBackend } from "@/lib/types";
 
@@ -140,6 +141,7 @@ export default function ChatIndexPage() {
               }
             }}
           />
+          <MicButton onText={(t) => setInput((v) => (v ? v + " " + t : t))} onAutoSend={() => void start()} />
           <ModelPicker
             value={model as { backend: ChatBackend; modelId: string } | null}
             onChange={(v) => setModel({ backend: v.backend, modelId: v.modelId })}

@@ -2,6 +2,7 @@ import { inArray } from "drizzle-orm";
 import { db } from "@/server/db/client";
 import { brainChunks, brainDocuments } from "@/server/db/schema";
 import { embedQuery } from "./embeddings";
+import { rerankConfigured, rerankCandidates } from "./rerank";
 import { searchIndex, conversationIdOf } from "./vectorStore";
 import { searchLexical } from "./lexical";
 import { metaMatches, type MetaFilter, type VectorHit } from "./vectorTypes";
@@ -78,7 +79,31 @@ export async function searchBrain(
     // fusion — post-fusion scores are on the (much smaller) RRF scale.
     if (opts?.minScore != null) dense = dense.filter((h) => h.score >= opts.minScore!);
     const lexical = filterLexicalByMeta(searchLexical(query, K_CANDIDATES), opts?.filter);
-    hits = reciprocalRankFusion([dense, lexical]).slice(0, topK);
+    const fused = reciprocalRankFusion([dense, lexical]);
+    // Rerank stage (when a rerank server is configured): the fused top-20 go
+    // to the cross-encoder with their chunk text; its ordering replaces RRF's.
+    // Any failure falls straight back to the RRF order — never worse than
+    // before the reranker existed.
+    hits = fused.slice(0, topK);
+    if (rerankConfigured() && fused.length > topK) {
+      const pool = fused.slice(0, 20);
+      const rows = db
+        .select()
+        .from(brainChunks)
+        .where(inArray(brainChunks.id, pool.map((h) => h.id)))
+        .all();
+      const textById = new Map(rows.map((c) => [c.id, c.content]));
+      const order = await rerankCandidates(
+        query,
+        pool.filter((h) => textById.has(h.id)).map((h) => ({ id: h.id, text: (textById.get(h.id) as string).slice(0, 2000) })),
+      );
+      if (order && order.length > 0) {
+        const byId = new Map(pool.map((h) => [h.id, h]));
+        const reranked = order.map((id) => byId.get(id)).filter((h): h is NonNullable<typeof h> => !!h);
+        if (reranked.length >= Math.min(topK, pool.length)) hits = reranked.slice(0, topK);
+        console.log('[brain] reranked', pool.length, '->', hits.length);
+      }
+    }
   }
   if (hits.length === 0) return [];
 
