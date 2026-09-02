@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { WakeWordTester } from "@/components/settings/wake-word-tester";
 
 type Config = {
   vaultPath: string;
@@ -20,6 +21,8 @@ type Config = {
   wikipediaProvider: string;
   kiwixUrl: string;
   wikipediaLangs: string;
+  kiwixExtraBooks: string;
+  wakeWords: string;
   webSearchProvider: string;
   searxngUrl: string;
   braveApiKey: string;
@@ -47,6 +50,8 @@ const FIELDS: { key: keyof Config; label: string; hint: string }[] = [
   { key: "qdrantUrl", label: "Qdrant URL (optional)", hint: "Blank = keep vectors in this phone's RAM. Set to a Qdrant server (e.g. http://<lenovo-ip>:6333) to hold memory off-device so it can scale to gigabytes." },
   { key: "kiwixUrl", label: "Kiwix URL(s) (offline Wikipedia)", hint: "kiwix-serve host(s). Comma-separate several to try in order — e.g. a small local ZIM first, a big one on another box as fallback." },
   { key: "wikipediaLangs", label: "Wikipedia languages", hint: "Comma-separated wiki codes, e.g. en,cs" },
+  { key: "kiwixExtraBooks", label: "Extra Kiwix books", hint: "Non-encyclopedia ZIMs consulted alongside the wikis, by book name — e.g. wiktionary_en_all for a dictionary that defines Latin and French terms." },
+  { key: "wakeWords", label: "Wake words", hint: "Comma-separated. Whisper mishears a name in its own consistent ways — use the tester below to see what it actually heard, and add those spellings." },
   { key: "searxngUrl", label: "SearXNG URL (optional)", hint: "Self-hosted SearXNG instance for the web search provider, e.g. http://<lenovo-ip>:8888" },
   { key: "braveApiKey", label: "Brave Search API key (optional)", hint: "Only needed when the web search provider is Brave" },
   { key: "homeAssistantUrl", label: "Home Assistant URL (optional)", hint: "e.g. http://<lenovo-ip>:8123 — enables the home_assistant_* tools for any agent (and voice) with tool calling on" },
@@ -205,6 +210,19 @@ export default function SettingsPage() {
                 autoComplete={isSecret ? "off" : undefined}
               />
               <p className="text-xs text-neutral-600 mt-1">{hint}</p>
+              {key === "wakeWords" && (
+                <WakeWordTester
+                  words={config.wakeWords}
+                  onAddWord={(w) => {
+                    const have = config.wakeWords
+                      .split(",")
+                      .map((s) => s.trim().toLowerCase())
+                      .filter(Boolean);
+                    if (have.includes(w)) return;
+                    setConfig({ ...config, wakeWords: [...have, w].join(",") });
+                  }}
+                />
+              )}
               {key === "embeddingModel" && (
                 <div className="flex items-center gap-3 mt-2">
                   <Button variant="secondary" onClick={reindexBrain} disabled={reindexing}>
