@@ -27,6 +27,39 @@ function formatTime(epochMs?: number): string | null {
   return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
 }
 
+/**
+ * A first guess at what this note should be called: a leading markdown
+ * heading if the reply has one, otherwise its opening sentence, trimmed to
+ * something that reads as a title in the vault's file list. Only a
+ * suggestion — it lands in an editable field, because the person saving
+ * knows what they'll search for later.
+ */
+function suggestNoteTitle(content: string): string {
+  const heading = content.match(/^\s*#{1,3}\s+(.+)$/m)?.[1];
+  const raw =
+    heading ??
+    content
+      .replace(/^[\s>*_#-]+/, "")
+      .split(/(?<=[.!?])\s|\n/)[0] ??
+    "";
+  const cleaned = raw
+    .replace(/[*_`[\]]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (cleaned.length <= 60) return cleaned;
+  // Cut at a word boundary rather than mid-word.
+  return cleaned.slice(0, 60).replace(/\s+\S*$/, "");
+}
+
+/** Strip what a filename can't carry, keeping accents — this vault is Czech. */
+function safeNoteName(name: string): string {
+  return name
+    .replace(/[\\/:*?"<>|#^[\]]/g, "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 80);
+}
+
 // Odysseus-style message cards: full cards with a "● You / ✦ model" header
 // row and, on replies, a mono stats footer — instead of chat bubbles.
 export function MessageBubble({
@@ -41,13 +74,22 @@ export function MessageBubble({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showSources, setShowSources] = useState(false);
+  const [naming, setNaming] = useState(false);
+  const [title, setTitle] = useState("");
+  const [savedAs, setSavedAs] = useState<string | null>(null);
   const time = formatTime(message.createdAt);
 
+  function beginSave() {
+    setTitle(suggestNoteTitle(message.content));
+    setNaming(true);
+    setError(null);
+  }
+
   async function saveToObsidian() {
+    const filename = safeNoteName(title) || `chat-note-${Date.now()}`;
     setSaving(true);
     setError(null);
     try {
-      const filename = `chat-note-${Date.now()}`;
       const citationSourcePaths = message.citations?.map((c) => c.sourcePath) ?? [];
       const res = await fetch("/api/obsidian/save-note", {
         method: "POST",
@@ -57,6 +99,8 @@ export function MessageBubble({
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed to save");
       setSaved(true);
+      setNaming(false);
+      setSavedAs(filename);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -154,14 +198,45 @@ export function MessageBubble({
             )}
             <span className="ml-auto flex items-center gap-2">
               <button
-                onClick={saveToObsidian}
+                onClick={saved ? undefined : naming ? () => setNaming(false) : beginSave}
                 disabled={saving || saved}
+                title={savedAs ? `Saved as ${savedAs}.md` : undefined}
                 className="text-xs text-ink-dim hover:text-ink disabled:opacity-50"
               >
-                {saved ? "Saved to Obsidian" : saving ? "Saving…" : "Save to Obsidian"}
+                {saved
+                  ? `Saved as ${savedAs}`
+                  : saving
+                    ? "Saving…"
+                    : naming
+                      ? "Cancel"
+                      : "Save to Obsidian"}
               </button>
               <SpeakButton text={message.content} />
             </span>
+            {naming && !saved && (
+              <span className="mt-1 flex w-full items-center gap-2">
+                <input
+                  autoFocus
+                  value={title}
+                  onChange={(e) => setTitle(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") void saveToObsidian();
+                    if (e.key === "Escape") setNaming(false);
+                  }}
+                  placeholder="Note name…"
+                  aria-label="Name for the new Obsidian note"
+                  className="flex-1 rounded border bg-transparent px-2 py-1 text-xs text-ink placeholder:text-ink-dim focus:outline-none"
+                  style={{ borderColor: "var(--border)" }}
+                />
+                <button
+                  onClick={() => void saveToObsidian()}
+                  disabled={saving || title.trim() === ""}
+                  className="rounded bg-accent px-2 py-1 text-xs font-medium text-black disabled:opacity-40"
+                >
+                  Save
+                </button>
+              </span>
+            )}
             {error && <span className="text-xs text-red-400">{error}</span>}
           </div>
         )}
