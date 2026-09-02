@@ -113,9 +113,14 @@ const QUESTION_NOISE = new Set([
   "explain", "define", "definition", "say", "says", "origin", "where",
 ]);
 
-/** A quoted phrase is the term being asked about — search that, not the question. */
+/**
+ * A quoted phrase is the term being asked about — search that, not the
+ * question. Delimiters must sit at a word boundary, or the apostrophes inside
+ * "don't ... isn't" would read as a quotation, and French terms like
+ * trompe-l'œil would be torn in half.
+ */
 function quotedPhrase(query: string): string | null {
-  const m = query.match(/["“„«»']([^"“”„«»']{2,60})["“”„«»']/);
+  const m = query.match(/(?:^|\s)["“„«']([^"“”„«»']{2,60})["“”»'](?=$|[\s,.!?;:])/);
   return m ? m[1].trim() : null;
 }
 
