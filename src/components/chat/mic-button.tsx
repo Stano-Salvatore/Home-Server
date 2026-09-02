@@ -22,8 +22,21 @@ const SILENCE_MS = 700;
 const MIN_SEGMENT_MS = 800;
 const SPEECH_RMS = 0.005; // USB desktop mics run quiet — 0.015 missed real speech
 const AUTO_SEND_MS = 5000;
-// whisper's greatest hits for "Nedory", learned empirically
-const WAKE_RE = /\b(nedory|nedori|nedary|netary|netery|nedery)\b[,.!?]?\s*/i;
+// Whisper's greatest hits for "Nedory". Editable in Settings, because which
+// mishearings occur depends on the voice and the microphone — this list is
+// only the starting point, and the transcript of what was actually heard is
+// shown in the settings tester so real ones can be added.
+const FALLBACK_WAKE_WORDS = "nedory,nedori,nedary,netary,netery,nedery";
+
+export function wakeRegex(words: string): RegExp | null {
+  const alts = words
+    .split(",")
+    .map((w) => w.trim())
+    .filter(Boolean)
+    .map((w) => w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"))
+    .join("|");
+  return alts ? new RegExp(`\\b(${alts})\\b[,.!?]?\\s*`, "i") : null;
+}
 
 type Mode = "off" | "wake" | "active";
 
@@ -48,8 +61,26 @@ export function MicButton({
   const chainRef = useRef<Promise<void>>(Promise.resolve());
   const segRef = useRef({ start: 0, lastLoud: 0, sawSpeech: false });
   const sentAnyRef = useRef(false);
+  const wakeReRef = useRef<RegExp | null>(wakeRegex(FALLBACK_WAKE_WORDS));
   const cb = useRef({ onText, onAutoSend });
   cb.current = { onText, onAutoSend };
+
+  // Load the user's own wake words; the compiled-in list stands in until then.
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/settings")
+      .then((r) => r.json())
+      .then((d) => {
+        const words: string = d?.config?.wakeWords ?? "";
+        if (!cancelled && words.trim()) wakeReRef.current = wakeRegex(words);
+      })
+      .catch(() => {
+        /* keep the fallback list */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => () => teardown(), []);
@@ -93,7 +124,7 @@ export function MicButton({
           cb.current.onText(text);
           sentAnyRef.current = true;
         } else if (recordedIn === "wake" && modeRef.current === "wake") {
-          const m = text.match(WAKE_RE);
+          const m = wakeReRef.current ? text.match(wakeReRef.current) : null;
           if (m) {
             chime();
             setModeBoth("active");
