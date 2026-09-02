@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { WakeWordTester } from "@/components/settings/wake-word-tester";
+import { PowerCard } from "@/components/settings/power-card";
 
 type Config = {
   vaultPath: string;
@@ -149,6 +150,7 @@ export default function SettingsPage() {
 
       <VaultsCard />
       <SecurityCard />
+      <PowerCard />
 
       <Card className="p-5 flex flex-col gap-5">
         <div>
