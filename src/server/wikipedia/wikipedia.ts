@@ -1,7 +1,14 @@
 import { htmlToText } from "html-to-text";
 import { loadSettings } from "@/server/settings/config";
 
-export type WikiHit = { title: string; extract: string; lang: string; url: string };
+export type WikiHit = {
+  title: string;
+  extract: string;
+  lang: string;
+  url: string;
+  /** Which work this came from; defaults to Wikipedia when absent. */
+  source?: string;
+};
 
 const MAX_EXTRACT_CHARS = 1500;
 const FETCH_TIMEOUT_MS = 8000;
@@ -11,7 +18,16 @@ function langsList(): string[] {
     .wikipediaLangs.split(",")
     .map((s) => s.trim())
     .filter(Boolean)
-    .slice(0, 3);
+    .slice(0, 6);
+}
+
+/** Extra local ZIMs (dictionaries) consulted alongside the encyclopedias. */
+function extraBooksList(): string[] {
+  return loadSettings()
+    .kiwixExtraBooks.split(",")
+    .map((s) => s.trim())
+    .filter(Boolean)
+    .slice(0, 4);
 }
 
 async function fetchJson(url: string): Promise<unknown> {
@@ -74,18 +90,38 @@ async function kiwixBooks(kiwixUrl: string): Promise<string[]> {
 // nothing and the whole offline path looked dead. Strip the question scaffolding
 // (cs/sk/en) before suggesting, and when even that finds no title, fall back to
 // kiwix's Xapian fulltext /search and take its top result.
+// A dictionary makes this sharper still: encyclopedia articles are long enough
+// that a sloppy fulltext query still overlaps them, but a Wiktionary entry for
+// "memento mori" is a few lines and matches nothing unless the term arrives
+// nearly bare. Hence two extra steps: quoted phrases win outright (people
+// quote the term they're asking about), and the stopword list covers the
+// vocabulary of asking-what-something-means.
 const QUESTION_NOISE = new Set([
   // sk/cs
   "kto", "kdo", "bol", "byl", "bola", "byla", "je", "sú", "jsou", "čo", "co",
   "aký", "jaký", "aká", "jaká", "ake", "aké", "jaké", "kde", "kedy", "kdy",
   "prečo", "proč", "ako", "jak", "ktorý", "který", "ktorá", "která", "mi", "o",
   "povedz", "řekni", "krátko", "krátce", "stručne", "stručně",
+  "znamená", "znamena", "znamenať", "znamenat", "slovo", "fráza", "fráze",
+  "výraz", "vysvetli", "vysvětli", "doslova", "znamenají", "znamenajú",
   // en
   "who", "what", "was", "is", "are", "were", "the", "a", "an", "tell", "me",
   "about", "briefly", "please", "short",
+  "does", "do", "did", "mean", "means", "meaning", "meant", "literally",
+  "literal", "phrase", "word", "term", "expression", "use", "used", "using",
+  "come", "comes", "from", "in", "of", "and", "or", "to", "it", "this", "that",
+  "explain", "define", "definition", "say", "says", "origin", "where",
 ]);
 
+/** A quoted phrase is the term being asked about — search that, not the question. */
+function quotedPhrase(query: string): string | null {
+  const m = query.match(/["“„«»']([^"“”„«»']{2,60})["“”„«»']/);
+  return m ? m[1].trim() : null;
+}
+
 function stripQuestionNoise(query: string): string {
+  const quoted = quotedPhrase(query);
+  if (quoted) return quoted;
   const cleaned = query
     .replace(/[?!.,;:"„“]/g, " ")
     .split(/\s+/)
@@ -169,12 +205,32 @@ async function kiwixSearch(query: string, urls: string[], langs: string[]): Prom
       const book =
         books.find((b) => b.startsWith("wikipedia") && langRe.test(b)) ??
         books.find((b) => langRe.test(b)) ??
-        books[0];
+        // Single-ZIM hosts (a phone serving one book) don't encode a language
+        // we can match; with a whole shelf served, a language we don't have is
+        // simply absent — searching some unrelated book instead would be worse
+        // than returning nothing for it.
+        (books.length === 1 ? books[0] : undefined);
       if (!book) continue;
       const hit = await kiwixSearchBook(url, book, query, lang);
       if (hit) {
         hits.push(hit);
         break; // got this language from a host — don't hit the fallback host too
+      }
+    }
+  }
+
+  // Dictionaries and other reference ZIMs, matched by name rather than by
+  // language: one English Wiktionary covers Latin, French and everything else
+  // borrowed into the books Salvatore reads.
+  for (const wanted of extraBooksList()) {
+    for (const url of urls) {
+      const book = (await booksOf(url)).find((b) => b.startsWith(wanted));
+      if (!book) continue;
+      const [work, lang] = book.split("_");
+      const hit = await kiwixSearchBook(url, book, query, lang ?? "ref");
+      if (hit) {
+        hits.push({ ...hit, source: work.charAt(0).toUpperCase() + work.slice(1) });
+        break;
       }
     }
   }
