@@ -168,8 +168,23 @@ export async function getWikipediaContext(
   query: string,
 ): Promise<{ block: string; citations: Citation[] } | null> {
   try {
-    const { wikipediaSearch } = await import("@/server/wikipedia/wikipedia");
-    const hits = await wikipediaSearch(query);
+    const { wikipediaLookup } = await import("@/server/wikipedia/wikipedia");
+    const { hits, nearby } = await wikipediaLookup(query);
+    // Nothing matched, but the library holds titles a typo away: hand those to
+    // the model as a correction to offer rather than a fact to assert. Without
+    // this the reply is a flat "not found" for what is usually a slip.
+    if (hits.length === 0 && nearby.length > 0) {
+      return {
+        block:
+          `No encyclopedia or dictionary entry matched the term the user asked about. ` +
+          `These titles DO exist in the offline library and are one typo away: ` +
+          `${nearby.join(", ")}.\n\n` +
+          `Say plainly that their spelling was not found — write their word in italics — ` +
+          `then ask whether they meant one of these, in bold. Offer, don't assume. ` +
+          `Never invent a meaning for the spelling they typed.`,
+        citations: [],
+      };
+    }
     if (hits.length === 0) return null;
     const block = hits
       .map((h, i) => `[W${i + 1}] (${h.source ?? "Wikipedia"} ${h.lang}: ${h.title}) ${h.extract}`)
