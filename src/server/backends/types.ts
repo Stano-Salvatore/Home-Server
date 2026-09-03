@@ -26,7 +26,19 @@ export type PullProgressEvent = {
 // Most yields carry only `text`. A backend that reports an exact generated
 // token count (Ollama's `eval_count`, llama.cpp's streamed `usage`) attaches
 // `tokenCount` to its final yield so callers don't have to estimate it.
-export type ChatStreamChunk = { text: string; tokenCount?: number };
+export type ChatStreamChunk = {
+  text: string;
+  tokenCount?: number;
+  /**
+   * Reasoning tokens, present only when the caller asked a thinking model to
+   * think. Kept separate from `text` so a backend never has to smuggle
+   * reasoning into the answer.
+   */
+  thinking?: string;
+};
+
+/** Per-call options a backend may honour; unknown fields are ignored. */
+export type ChatStreamOptions = { think?: boolean };
 
 export interface ModelBackend {
   kind: BackendKind;
@@ -35,6 +47,7 @@ export interface ModelBackend {
     target: string,
     messages: ChatMessage[],
     signal?: AbortSignal,
+    options?: ChatStreamOptions,
   ): AsyncIterable<ChatStreamChunk>;
   chatComplete(target: string, messages: ChatMessage[]): Promise<string>;
 }

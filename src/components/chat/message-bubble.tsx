@@ -5,6 +5,7 @@ import type { ChatUIMessage } from "@/lib/useChatStream";
 import { Markdown } from "./markdown";
 import { ThinkingSpiral } from "@/components/ui/thinking-spiral";
 import { SpeakButton } from "@/components/ui/speak-button";
+import { Brain } from "lucide-react";
 
 function formatStats(durationMs: number, tokenCount: number): string {
   const seconds = durationMs / 1000;
@@ -74,6 +75,7 @@ export function MessageBubble({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showSources, setShowSources] = useState(false);
+  const [showThinking, setShowThinking] = useState(false);
   const [naming, setNaming] = useState(false);
   const [title, setTitle] = useState("");
   const [savedAs, setSavedAs] = useState<string | null>(null);
@@ -129,6 +131,29 @@ export function MessageBubble({
           )}
           {time && <span className="text-ink-dim opacity-60">{time}</span>}
         </div>
+
+        {/* Reasoning, when this conversation has thinking on. It sits above
+            the answer, collapsed once the answer exists — worth being able to
+            check, not worth reading every time. */}
+        {!isUser && message.thinking && (
+          <div className="mb-2">
+            <button
+              onClick={() => setShowThinking((v) => !v)}
+              className="flex items-center gap-1.5 text-xs text-ink-dim hover:text-ink"
+            >
+              <Brain size={12} />
+              {showThinking ? "hide reasoning" : `reasoning (${message.thinking.length} chars)`}
+            </button>
+            {showThinking && (
+              <div
+                className="mt-1.5 max-h-64 overflow-y-auto whitespace-pre-wrap rounded-md border px-3 py-2 text-xs text-ink-dim"
+                style={{ borderColor: "var(--border)", background: "var(--surface-2)" }}
+              >
+                {message.thinking}
+              </div>
+            )}
+          </div>
+        )}
 
         {isUser ? (
           <span className="whitespace-pre-wrap text-ink">{message.content}</span>

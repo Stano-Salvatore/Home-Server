@@ -9,7 +9,7 @@ export async function GET() {
 
 export async function POST(req: NextRequest) {
   const body = await req.json();
-  const { backend, modelId, title, systemPrompt, projectId, scopeId, ragEnabled, wikiEnabled, webEnabled } = body;
+  const { backend, modelId, title, systemPrompt, projectId, scopeId, ragEnabled, wikiEnabled, webEnabled, thinkEnabled } = body;
   if (!backend || !modelId) {
     return NextResponse.json({ error: "backend and modelId are required" }, { status: 400 });
   }
@@ -22,6 +22,7 @@ export async function POST(req: NextRequest) {
     scopeId,
     ragEnabled,
     wikiEnabled,
+    thinkEnabled,
     webEnabled,
   });
   return NextResponse.json({ conversation });
