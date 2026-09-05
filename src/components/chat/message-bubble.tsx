@@ -6,6 +6,7 @@ import { Markdown } from "./markdown";
 import { ThinkingSpiral } from "@/components/ui/thinking-spiral";
 import { SpeakButton } from "@/components/ui/speak-button";
 import { Brain } from "lucide-react";
+import { RememberButton } from "./remember-button";
 
 function formatStats(durationMs: number, tokenCount: number): string {
   const seconds = durationMs / 1000;
@@ -236,6 +237,7 @@ export function MessageBubble({
                       ? "Cancel"
                       : "Save to Obsidian"}
               </button>
+              <RememberButton text={message.content} />
               <SpeakButton text={message.content} />
             </span>
             {naming && !saved && (

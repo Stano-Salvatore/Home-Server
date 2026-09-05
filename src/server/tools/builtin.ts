@@ -3,6 +3,7 @@ import { getHardware } from "@/server/hardware/scan";
 import { probeServices } from "@/server/nodes/services";
 import { HOME_ASSISTANT_TOOLS, homeAssistantConfigured } from "./homeassistant";
 import { REMINDER_TOOLS } from "./reminders";
+import { JOB_TOOLS } from "./jobs";
 import type { BuiltinTool } from "./types";
 
 export type { BuiltinTool };
@@ -65,7 +66,7 @@ const NEDORY_BUILTIN_TOOLS: BuiltinTool[] = [
 // configured/unconfigured at runtime, so the tool list has to be recomputed
 // per call rather than fixed at module load.
 export function getBuiltinTools(): BuiltinTool[] {
-  const tools = [...NEDORY_BUILTIN_TOOLS];
+  const tools = [...NEDORY_BUILTIN_TOOLS, ...JOB_TOOLS];
   if (homeAssistantConfigured()) tools.push(...HOME_ASSISTANT_TOOLS);
   return tools;
 }

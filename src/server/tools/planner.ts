@@ -118,13 +118,23 @@ export async function planToolCalls(
   tools = await shortlistTools(userContent, tools);
   const validNames = new Set(tools.map((t) => t.name));
 
-  const text = await plannerCall(
-    [
-      { role: "system", content: systemPrompt(tools) },
-      { role: "user", content: userContent },
-    ],
-    ollamaFallbackTarget,
-  );
+  const ask = () =>
+    plannerCall(
+      [
+        { role: "system", content: systemPrompt(tools) },
+        { role: "user", content: userContent },
+      ],
+      ollamaFallbackTarget,
+    );
+
+  // Small models are inconsistent here: the same question yields a correct
+  // tool call on one run and an empty plan on the next — asked to find a job
+  // in Bratislava, the planner named the tool once and skipped it entirely the
+  // time after. A second attempt costs about a second and turns "sometimes
+  // searches" into "searches". Each attempt is bounded by plannerCall's own
+  // timeout, and a model that genuinely wants no tool answers empty twice.
+  let text = await ask();
+  if (!text || !text.includes('"tool"')) text = (await ask()) || text;
   if (!text) return [];
 
   try {
