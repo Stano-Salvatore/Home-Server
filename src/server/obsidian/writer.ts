@@ -111,3 +111,48 @@ export async function writeNote(opts: {
 
   return absolutePath;
 }
+
+/**
+ * Adds a section to a note, creating it if it isn't there yet.
+ *
+ * The vault is years of Salvatore's own reading notes, so an assistant that
+ * can write into it must never be able to replace one. Existing files are
+ * only ever appended to; `header` separates the new section from whatever was
+ * already written, and the original text is preserved byte for byte.
+ */
+export async function appendToNote(opts: {
+  filename: string;
+  header: string;
+  body: string;
+  /** Used only when the note does not exist yet. */
+  createWith?: string;
+}): Promise<{ path: string; created: boolean }> {
+  const vaultPath = primaryVaultPath();
+  if (!vaultPath) throw new Error("No Obsidian vault configured");
+
+  const safeName = sanitizeRelativePath(opts.filename);
+  const relativePath = safeName.endsWith(".md") ? safeName : `${safeName}.md`;
+  const absolutePath = path.resolve(vaultPath, relativePath);
+  const vaultRoot = path.resolve(vaultPath) + path.sep;
+  if (!absolutePath.startsWith(vaultRoot)) {
+    throw new Error("Refusing to write outside the configured vault path");
+  }
+
+  const exists = fs.existsSync(absolutePath);
+  const existing = exists ? fs.readFileSync(absolutePath, "utf-8") : (opts.createWith ?? "");
+  const separator = existing.trim() === "" ? "" : existing.endsWith("\n") ? "\n" : "\n\n";
+  const content = `${existing}${separator}${opts.header}\n\n${opts.body}\n`;
+
+  markSelfWritten(absolutePath);
+  fs.mkdirSync(path.dirname(absolutePath), { recursive: true });
+  fs.writeFileSync(absolutePath, content, "utf-8");
+
+  await ingestDocument({
+    sourceType: "obsidian",
+    sourcePath: absolutePath,
+    title: path.basename(safeName, ".md"),
+    content,
+  });
+
+  return { path: absolutePath, created: !exists };
+}

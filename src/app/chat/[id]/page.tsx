@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, use as usePromise } from "react";
 import { useChatStream } from "@/lib/useChatStream";
 import { MessageBubble } from "@/components/chat/message-bubble";
+import { BookNoteButton } from "@/components/chat/book-note-button";
 import { ModelPicker } from "@/components/chat/model-picker";
 import { MicButton } from "@/components/chat/mic-button";
 import { PillToggle } from "@/components/ui/pill-toggle";
@@ -84,7 +85,7 @@ export default function ConversationPage({ params }: { params: Promise<{ id: str
 
   return (
     <div className="flex flex-col h-full">
-      <div className="flex flex-wrap items-center justify-between gap-2 border-b px-5 py-3" style={{ borderColor: "var(--border)" }}>
+      <div className="relative flex flex-wrap items-center justify-between gap-2 border-b px-5 py-3" style={{ borderColor: "var(--border)" }}>
         <div className="flex items-center gap-2 min-w-0">
           {conversation ? (
             <>
@@ -146,6 +147,7 @@ export default function ConversationPage({ params }: { params: Promise<{ id: str
             >
               Think
             </PillToggle>
+            <BookNoteButton conversationId={id} />
           </div>
         )}
       </div>

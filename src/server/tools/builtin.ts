@@ -65,6 +65,7 @@ const NEDORY_BUILTIN_TOOLS: BuiltinTool[] = [
 // configured/unconfigured at runtime, so the tool list has to be recomputed
 // per call rather than fixed at module load.
 export function getBuiltinTools(): BuiltinTool[] {
-  if (!homeAssistantConfigured()) return NEDORY_BUILTIN_TOOLS;
-  return [...NEDORY_BUILTIN_TOOLS, ...HOME_ASSISTANT_TOOLS];
+  const tools = [...NEDORY_BUILTIN_TOOLS];
+  if (homeAssistantConfigured()) tools.push(...HOME_ASSISTANT_TOOLS);
+  return tools;
 }
