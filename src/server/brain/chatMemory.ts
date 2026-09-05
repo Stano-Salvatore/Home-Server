@@ -101,9 +101,32 @@ export async function rememberChatTurn(opts: {
  * memory; global chats only recall global memory), and never recalls the
  * current conversation's own turns.
  */
+/**
+ * Chat memories belonging to conversations that shared this scope.
+ *
+ * Pinning an agent to a shelf narrows which documents it retrieves, but chat
+ * memory ignored that entirely — so Alice, limited to the teaching shelf,
+ * still recalled Slovak spelling lessons from unrelated conversations and
+ * reasoned from them out loud. An agent given a subject should remember that
+ * subject and nothing else.
+ */
+function chatDocIdsForScope(scopeId: string): string[] {
+  const chatDocs = db
+    .select({ id: brainDocuments.id, sourcePath: brainDocuments.sourcePath })
+    .from(brainDocuments)
+    .where(eq(brainDocuments.sourceType, "chat"))
+    .all();
+  const scoped = db.all(sql`SELECT id FROM conversations WHERE scope_id = ${scopeId}`) as {
+    id: string;
+  }[];
+  const ids = new Set(scoped.map((c) => c.id));
+  // Chat memory is stored at "chat:<conversationId>:<messageId>".
+  return chatDocs.filter((d) => ids.has(d.sourcePath.split(":")[1] ?? "")).map((d) => d.id);
+}
+
 export async function recallChatMemory(
   query: string,
-  conversation: { id: string; projectId: string | null },
+  conversation: { id: string; projectId: string | null; scopeId?: string | null },
   topK = 4,
 ): Promise<SearchHit[]> {
   try {
@@ -113,6 +136,13 @@ export async function recallChatMemory(
       projectIdIn: [conversation.projectId],
       conversationIdNe: conversation.id,
     };
+    if (conversation.scopeId) {
+      const ids = chatDocIdsForScope(conversation.scopeId);
+      // No shared history on this shelf yet is a real answer — recall nothing,
+      // rather than falling back to every conversation ever had.
+      if (ids.length === 0) return [];
+      filter.documentIdIn = ids;
+    }
     // A modest floor keeps unrelated chatter out of the prompt. Dense-only
     // (lexical: false): the 0.55 floor is a cosine-similarity threshold, and
     // BM25 word matches on casual chat text would pull unrelated chatter in.

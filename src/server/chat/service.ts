@@ -133,7 +133,7 @@ export async function getRagContext(
 /** Always-on: recall relevant snippets from past conversations (project-scoped). */
 async function getChatMemoryContext(
   query: string,
-  conversation: { id: string; projectId: string | null },
+  conversation: { id: string; projectId: string | null; scopeId?: string | null },
 ): Promise<string | null> {
   try {
     const { recallChatMemory } = await import("@/server/brain/chatMemory");
