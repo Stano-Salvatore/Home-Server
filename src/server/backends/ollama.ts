@@ -1,5 +1,5 @@
 import { resolveHost, defaultNode, parseOllamaTarget } from "@/server/nodes/nodes";
-import type { ChatMessage, ChatStreamChunk, ModelBackend, PullProgressEvent, RunningModel } from "./types";
+import type { ChatMessage, ChatStreamChunk, ChatStreamOptions, ModelBackend, PullProgressEvent, RunningModel } from "./types";
 
 function clean(url: string): string {
   return url.replace(/\/$/, "");
@@ -98,18 +98,22 @@ async function* streamChat(
   target: string,
   messages: ChatMessage[],
   signal?: AbortSignal,
+  options?: ChatStreamOptions,
 ): AsyncIterable<ChatStreamChunk> {
   // target is `nodeId::tag` (or a legacy bare tag → default node).
   const { nodeId, tag } = parseOllamaTarget(target);
   const host = resolveHost(nodeId);
+  // Thinking is off unless asked for. It is worth asking for: measured on the
+  // ryzen, qwen3.5:9b writes the right formula for a two-step arithmetic
+  // question and then computes it wrong with think off, and gets it right
+  // with think on — at roughly triple the wall time. So it is the user's
+  // choice per conversation, not a global default. Ollama ignores the flag
+  // for models that cannot think.
+  const think = options?.think === true;
   const res = await fetch(`${clean(host)}/api/chat`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    // think:false — reasoning models (qwen3+) otherwise burn minutes of
-    // thinking tokens that stream as message.thinking, which this backend
-    // (and the chat UI) has no channel for: the user sees "writing a reply…"
-    // and nothing else. Ollama ignores the flag for non-thinking models.
-    body: JSON.stringify({ model: tag, messages, stream: true, think: false }),
+    body: JSON.stringify({ model: tag, messages, stream: true, think }),
     signal,
   });
   if (!res.ok || !res.body) {
@@ -129,6 +133,7 @@ async function* streamChat(
     for (const line of lines) {
       if (!line.trim()) continue;
       const parsed = JSON.parse(line);
+      if (parsed.message?.thinking) yield { text: "", thinking: parsed.message.thinking as string };
       if (parsed.message?.content) yield { text: parsed.message.content as string };
       if (parsed.done) {
         // eval_count is Ollama's exact count of tokens it generated.
@@ -178,8 +183,8 @@ export const ollamaBackend: ModelBackend = {
   async listRunning() {
     return listLoadedModels(defaultNode().url);
   },
-  chatStream(target, messages, signal) {
-    return streamChat(target, messages, signal);
+  chatStream(target, messages, signal, options) {
+    return streamChat(target, messages, signal, options);
   },
   async chatComplete(target, messages) {
     let full = "";

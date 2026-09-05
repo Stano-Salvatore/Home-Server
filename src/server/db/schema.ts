@@ -53,6 +53,7 @@ export const conversations = sqliteTable("conversations", {
   ragEnabled: integer("rag_enabled", { mode: "boolean" }).notNull().default(false),
   wikiEnabled: integer("wiki_enabled", { mode: "boolean" }).notNull().default(false),
   webEnabled: integer("web_enabled", { mode: "boolean" }).notNull().default(false),
+  thinkEnabled: integer("think_enabled", { mode: "boolean" }).notNull().default(false),
   createdAt: integer("created_at")
     .notNull()
     .default(sql`(unixepoch())`),

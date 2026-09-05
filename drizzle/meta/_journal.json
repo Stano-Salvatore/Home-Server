@@ -64,6 +64,13 @@
       "when": 1788210474029,
       "tag": "0008_add_message_via",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "6",
+      "when": 1788428245437,
+      "tag": "0009_add_think_enabled",
+      "breakpoints": true
     }
   ]
 }

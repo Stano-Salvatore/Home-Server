@@ -21,6 +21,9 @@ export type ChatUIMessage = {
   // while the reply is still empty; cleared as soon as real text streams in.
   // Never persisted — history loads leave it unset.
   status?: string;
+  // The model's reasoning, when this conversation has thinking on. Live only:
+  // it is not persisted, so reloading history shows the answer alone.
+  thinking?: string;
   createdAt?: number; // epoch ms, for the card header timestamp
   // Where the reply was actually generated, when it differs from the
   // conversation's configured target (a fallback answered). Persisted.
@@ -89,9 +92,22 @@ export function useChatStream(conversationId: string | null) {
         citations?: ChatUIMessage["citations"];
         stats?: { durationMs: number; tokenCount: number };
         via?: ChatUIMessage["via"];
+        thinking?: string;
       }>) {
         if (data.error) {
           setError(friendlyError(data.error));
+        } else if (data.thinking) {
+          // Reasoning arrives before the answer and is kept apart from it, so
+          // the bubble can show the working without it becoming the reply.
+          setMessages((prev) => {
+            const next = [...prev];
+            next[next.length - 1] = {
+              ...next[next.length - 1],
+              thinking: (next[next.length - 1].thinking ?? "") + data.thinking,
+              status: "thinking…",
+            };
+            return next;
+          });
         } else if (data.delta) {
           setMessages((prev) => {
             const next = [...prev];

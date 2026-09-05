@@ -39,6 +39,7 @@ export function createConversation(opts: {
   ragEnabled?: boolean;
   wikiEnabled?: boolean;
   webEnabled?: boolean;
+  thinkEnabled?: boolean;
 }) {
   const id = newId("conv");
   db.insert(conversations)
@@ -54,6 +55,7 @@ export function createConversation(opts: {
       ragEnabled: opts.ragEnabled ?? !!opts.scopeId,
       wikiEnabled: opts.wikiEnabled ?? false,
       webEnabled: opts.webEnabled ?? false,
+      thinkEnabled: opts.thinkEnabled ?? false,
     })
     .run();
   return getConversation(id)!;
@@ -66,6 +68,7 @@ export function updateConversation(
     ragEnabled: boolean;
     wikiEnabled: boolean;
     webEnabled: boolean;
+    thinkEnabled: boolean;
     backend: string;
     modelId: string;
     projectId: string | null;
@@ -213,7 +216,7 @@ async function* streamAssistant(
   conversation: Conversation,
   userContent: string,
   signal?: AbortSignal,
-): AsyncGenerator<{ delta?: string; citations?: Citation[]; stats?: GenStats; status?: string; via?: ChatVia }> {
+): AsyncGenerator<{ delta?: string; citations?: Citation[]; stats?: GenStats; status?: string; via?: ChatVia; thinking?: string }> {
   const conversationId = conversation.id;
   const history = listMessages(conversationId).slice(-HISTORY_LIMIT);
   const chatMessages: ChatMessage[] = [];
@@ -484,7 +487,10 @@ async function* streamAssistant(
     for (;;) {
       const backend = backendFor(route.backend);
       try {
-        for await (const chunk of backend.chatStream(route.modelId, chatMessages, signal)) {
+        for await (const chunk of backend.chatStream(route.modelId, chatMessages, signal, {
+          think: conversation.thinkEnabled,
+        })) {
+          if (chunk.thinking) yield { thinking: chunk.thinking };
           if (chunk.text) {
             full += chunk.text;
             yield { delta: chunk.text };
@@ -573,7 +579,7 @@ export async function* sendMessage(
   conversationId: string,
   userContent: string,
   signal?: AbortSignal,
-): AsyncGenerator<{ delta?: string; citations?: Citation[]; stats?: GenStats; status?: string; via?: ChatVia }> {
+): AsyncGenerator<{ delta?: string; citations?: Citation[]; stats?: GenStats; status?: string; via?: ChatVia; thinking?: string }> {
   const conversation = getConversation(conversationId);
   if (!conversation) throw new Error("Conversation not found");
 
@@ -591,7 +597,7 @@ export async function* sendMessage(
 export async function* regenerateLast(
   conversationId: string,
   signal?: AbortSignal,
-): AsyncGenerator<{ delta?: string; citations?: Citation[]; stats?: GenStats; status?: string; via?: ChatVia }> {
+): AsyncGenerator<{ delta?: string; citations?: Citation[]; stats?: GenStats; status?: string; via?: ChatVia; thinking?: string }> {
   const conversation = getConversation(conversationId);
   if (!conversation) throw new Error("Conversation not found");
 

@@ -19,6 +19,7 @@ type Conversation = {
   ragEnabled: boolean;
   wikiEnabled: boolean;
   webEnabled: boolean;
+  thinkEnabled: boolean;
 };
 type Project = { id: string; name: string; emoji: string | null };
 type Scope = { id: string; label: string; emoji?: string; color: string };
@@ -138,6 +139,12 @@ export default function ConversationPage({ params }: { params: Promise<{ id: str
             </PillToggle>
             <PillToggle active={conversation.webEnabled} onClick={() => patch({ webEnabled: !conversation.webEnabled })}>
               Web
+            </PillToggle>
+            <PillToggle
+              active={conversation.thinkEnabled}
+              onClick={() => patch({ thinkEnabled: !conversation.thinkEnabled })}
+            >
+              Think
             </PillToggle>
           </div>
         )}
