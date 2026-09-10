@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { WakeWordTester } from "@/components/settings/wake-word-tester";
-import { PowerCard } from "@/components/settings/power-card";
+import { PowerCard } from "@/components/nodes/power-card";
 
 type Config = {
   vaultPath: string;

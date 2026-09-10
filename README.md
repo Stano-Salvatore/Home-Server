@@ -4,6 +4,38 @@ A self-hosted dashboard for your local AI agents — inspired by Odysseus's "Coo
 
 Single Next.js app, single SQLite file, no external services — and **no native modules**, so it installs and runs anywhere Node runs, including Android/Termux (no C++ toolchain or node-gyp needed).
 
+## What it does
+
+- **Chat** against your own Ollama / llama.cpp / LiteRT-LM models, across a fleet of devices
+- **Brain** — RAG with hybrid retrieval over an Obsidian vault, plus long-term memory facts
+- **Library** — ingest `.epub` / `.pdf` books and ask questions against them
+- **Deep Research** — multi-round gather, read and synthesize into a markdown report, from web, Wikipedia and your own notes
+- **Tasks** — scheduled prompts on cron, file-watch or one-shot triggers, output filed to your vault
+- **Cookbook** — scans the hardware it is running on and scores which models actually fit
+- **Files** — upload and browse photos and documents
+- **Obsidian** — two-way sync with a real vault on disk
+
+Everything works with no internet. The network only adds web search and live Wikipedia.
+
+## What is unusual about it
+
+Most self-hosted AI dashboards assume a Linux box with a discrete GPU. This one has
+**zero native modules**, which means no `node-gyp`, no C++ toolchain, and no compile
+step at install time. `better-sqlite3` is replaced by Node's built-in `node:sqlite`,
+and `sharp` is not used at all.
+
+The practical consequence is that it installs and runs on **Android under Termux**,
+where native modules cannot build. A retired phone becomes a real node. It also means
+it installs cleanly on Alpine, on ARM boards, and anywhere else a native build would
+normally fight you.
+
+## Status
+
+A personal project, run daily on the author's own fleet. It is shared because the
+approach may be useful to others, not as a supported product. Expect rough edges,
+and read `docs/CODEX.md` for the full architecture, history, and the list of things
+that were tried and did not work.
+
 ## Requirements
 
 - **Node.js 24+** (uses the built-in `node:sqlite`, which is unflagged from Node 24 on — no `better-sqlite3` compile step)
@@ -103,3 +135,13 @@ npm run start
 - `src/components` — UI (sidebar, per-feature components, shared primitives)
 - `drizzle/` — generated SQL migrations, applied automatically on boot
 - `data/` — gitignored runtime data (SQLite DB, uploads, covers, library)
+
+## Contributing
+
+Issues and pull requests are welcome. Before opening a larger one, please read
+`docs/CODEX.md` and the "Rejected" section of `docs/TODO.md` — several obvious-looking
+ideas were already tried and have documented reasons for not working.
+
+## License
+
+MIT. See [LICENSE](LICENSE).
