@@ -114,7 +114,7 @@ export default function NodesPage() {
             />
             <input
               className="rounded bg-[var(--surface-2)] border border-[var(--border)] px-3 py-1.5 text-sm text-ink focus:outline-none focus:border-accent"
-              placeholder="http://100.126.149.29:11434"
+              placeholder="http://100.x.y.z:11434"
               value={newUrl}
               onChange={(e) => setNewUrl(e.target.value)}
             />

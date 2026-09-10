@@ -37,6 +37,10 @@ export default function ComparePage() {
     setScoreboard(data.scoreboard ?? []);
   }, []);
   useEffect(() => {
+    // loadBoard is async: its setScoreboard runs in a promise continuation
+    // after the fetch resolves, not synchronously in the effect body, so it
+    // cannot cascade renders the way this rule guards against.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     void loadBoard();
   }, [loadBoard]);
 
